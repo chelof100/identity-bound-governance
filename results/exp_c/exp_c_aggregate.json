@@ -1,0 +1,240 @@
+{
+  "per_model": {
+    "mistral:7b": {
+      "params_b": 7.2,
+      "family": "Mistral",
+      "release": "2023-09",
+      "T_star": {
+        "mean": 157.0,
+        "std": 0.0,
+        "n": 3
+      },
+      "D_final": {
+        "mean": 0.43379999999999996,
+        "std": 0.0005354126134736438,
+        "n": 3
+      },
+      "enforcement_g_zero_all_runs": true,
+      "n_runs": 3,
+      "runs": [
+        {
+          "run": 1,
+          "T_star": 157,
+          "D_final": 0.4332,
+          "elapsed_sec": 68.3
+        },
+        {
+          "run": 2,
+          "T_star": 157,
+          "D_final": 0.4345,
+          "elapsed_sec": 66.4
+        },
+        {
+          "run": 3,
+          "T_star": 157,
+          "D_final": 0.4337,
+          "elapsed_sec": 67.9
+        }
+      ]
+    },
+    "deepseek-r1:8b": {
+      "params_b": 8.0,
+      "family": "DeepSeek",
+      "release": "2025-01",
+      "T_star": {
+        "mean": 160.0,
+        "std": 0.816496580927726,
+        "n": 3
+      },
+      "D_final": {
+        "mean": 0.4242666666666666,
+        "std": 0.0002867441755680796,
+        "n": 3
+      },
+      "enforcement_g_zero_all_runs": true,
+      "n_runs": 3,
+      "runs": [
+        {
+          "run": 1,
+          "T_star": 161,
+          "D_final": 0.4239,
+          "elapsed_sec": 134.3
+        },
+        {
+          "run": 2,
+          "T_star": 160,
+          "D_final": 0.4243,
+          "elapsed_sec": 123.1
+        },
+        {
+          "run": 3,
+          "T_star": 159,
+          "D_final": 0.4246,
+          "elapsed_sec": 124.5
+        }
+      ]
+    },
+    "gemma4:latest": {
+      "params_b": 4.0,
+      "family": "Google",
+      "release": "2025-03",
+      "T_star": {
+        "mean": 263.6666666666667,
+        "std": 5.2493385826745405,
+        "n": 3
+      },
+      "D_final": {
+        "mean": 0.272,
+        "std": 0.009638810438361503,
+        "n": 3
+      },
+      "enforcement_g_zero_all_runs": true,
+      "n_runs": 3,
+      "runs": [
+        {
+          "run": 1,
+          "T_star": 261,
+          "D_final": 0.278,
+          "elapsed_sec": 524.0
+        },
+        {
+          "run": 2,
+          "T_star": 271,
+          "D_final": 0.2796,
+          "elapsed_sec": 509.4
+        },
+        {
+          "run": 3,
+          "T_star": 259,
+          "D_final": 0.2584,
+          "elapsed_sec": 530.1
+        }
+      ]
+    },
+    "gpt-oss:20b": {
+      "params_b": 20.0,
+      "family": "OpenAI",
+      "release": "2025-08",
+      "T_star": {
+        "mean": null,
+        "std": null,
+        "n": 0,
+        "missing": 3
+      },
+      "D_final": {
+        "mean": 0.07083333333333335,
+        "std": 0.004923639123882074,
+        "n": 3
+      },
+      "enforcement_g_zero_all_runs": true,
+      "n_runs": 3,
+      "runs": [
+        {
+          "run": 1,
+          "T_star": null,
+          "D_final": 0.0684,
+          "elapsed_sec": 1371.7
+        },
+        {
+          "run": 2,
+          "T_star": null,
+          "D_final": 0.0664,
+          "elapsed_sec": 1363.7
+        },
+        {
+          "run": 3,
+          "T_star": null,
+          "D_final": 0.0777,
+          "elapsed_sec": 1369.7
+        }
+      ]
+    },
+    "qwen2.5:7b": {
+      "params_b": 7.6,
+      "family": "Alibaba",
+      "release": "2024-09",
+      "T_star": {
+        "mean": 154.0,
+        "std": 2.943920288775949,
+        "n": 3
+      },
+      "D_final": {
+        "mean": 0.4267666666666667,
+        "std": 0.000997775303139702,
+        "n": 3
+      },
+      "enforcement_g_zero_all_runs": true,
+      "n_runs": 3,
+      "runs": [
+        {
+          "run": 1,
+          "T_star": 155,
+          "D_final": 0.4265,
+          "elapsed_sec": 145.0
+        },
+        {
+          "run": 2,
+          "T_star": 150,
+          "D_final": 0.4281,
+          "elapsed_sec": 141.6
+        },
+        {
+          "run": 3,
+          "T_star": 157,
+          "D_final": 0.4257,
+          "elapsed_sec": 141.4
+        }
+      ]
+    },
+    "llama3.2:3b": {
+      "params_b": 3.2,
+      "family": "Meta",
+      "release": "2024-09",
+      "T_star": {
+        "mean": 151.33333333333334,
+        "std": 0.9428090415820634,
+        "n": 3
+      },
+      "D_final": {
+        "mean": 0.42956666666666665,
+        "std": 0.00020548046676563094,
+        "n": 3
+      },
+      "enforcement_g_zero_all_runs": true,
+      "n_runs": 3,
+      "runs": [
+        {
+          "run": 1,
+          "T_star": 152,
+          "D_final": 0.4296,
+          "elapsed_sec": 162.9
+        },
+        {
+          "run": 2,
+          "T_star": 152,
+          "D_final": 0.4298,
+          "elapsed_sec": 160.2
+        },
+        {
+          "run": 3,
+          "T_star": 150,
+          "D_final": 0.4293,
+          "elapsed_sec": 160.2
+        }
+      ]
+    }
+  },
+  "intra_model_cv_T_star": {
+    "mistral:7b": 0.0,
+    "deepseek-r1:8b": 0.005103103630798288,
+    "gemma4:latest": 0.019908995888778282,
+    "qwen2.5:7b": 0.019116365511532136,
+    "llama3.2:3b": 0.006230015693273546
+  },
+  "no_drift_models": [
+    "gpt-oss:20b"
+  ],
+  "stability_holds_for_measured": true,
+  "all_models_drifted_in_window": false,
+  "timestamp": "2026-05-08T19:35:53.069052+00:00"
+}

@@ -1,0 +1,15 @@
+{
+  "model": "llama3.2:3b",
+  "run": 3,
+  "drift_steps": 500,
+  "burn_in": 50,
+  "temperature": 0.4,
+  "theta": 0.2,
+  "T_star": 150,
+  "D_final": 0.4293,
+  "D_max": 0.4293,
+  "enforcement_total": 0,
+  "elapsed_sec": 160.2,
+  "llm_calls": 550,
+  "timestamp": "2026-05-08T14:18:48.241959+00:00"
+}

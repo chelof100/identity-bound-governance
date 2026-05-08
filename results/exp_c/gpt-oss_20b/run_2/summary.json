@@ -1,0 +1,15 @@
+{
+  "model": "gpt-oss:20b",
+  "run": 2,
+  "drift_steps": 500,
+  "burn_in": 50,
+  "temperature": 0.4,
+  "theta": 0.2,
+  "T_star": null,
+  "D_final": 0.0664,
+  "D_max": 0.0756,
+  "enforcement_total": 0,
+  "elapsed_sec": 1363.7,
+  "llm_calls": 550,
+  "timestamp": "2026-05-08T13:40:46.698916+00:00"
+}

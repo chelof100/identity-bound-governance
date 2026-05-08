@@ -1,0 +1,1116 @@
+\documentclass[11pt]{article}
+
+% --- Encoding & fonts (matches series style) ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[protrusion=true,expansion=false]{microtype}
+\setlength{\emergencystretch}{3em}
+
+% --- Page geometry ---
+\usepackage[margin=1in, top=1.1in, bottom=1.1in]{geometry}
+
+% --- Packages ---
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,
+            linkcolor=blue!70!black,
+            citecolor=blue!70!black,
+            urlcolor=blue!70!black]{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds}
+\usepackage{multirow}
+\usepackage{array}
+
+% --- Section formatting ---
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+% --- Paragraph spacing ---
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+
+% --- Theorem environments ---
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{remark}{Remark}[section]
+
+% --- Notation ---
+\newcommand{\Azero}{\mathcal{A}_0}
+\newcommand{\Dhat}{\widehat{D}}
+\newcommand{\HALT}{\texttt{HALT}}
+\newcommand{\RESUME}{\texttt{RESUME}}
+\newcommand{\DENY}{\texttt{DENY}}
+\newcommand{\RECAL}{\texttt{RECALIBRATE}}
+\newcommand{\Pset}{\mathcal{P}}
+\newcommand{\Es}{E_s}
+\newcommand{\Dh}{D_h}
+\newcommand{\sigh}{\sigma_h}
+\newcommand{\Hi}{H_i}
+\newcommand{\ski}{sk_i}
+\newcommand{\pki}{pk_i}
+\newcommand{\Tstar}{T^*}
+\newcommand{\APB}{\mathrm{APB}}
+
+% --- Title ---
+\title{\textbf{Identity-Bound Governance Under Execution Uncertainty}\\[4pt]
+       \large An Accountability Proof Block for LLM Agent Persistent Halts,
+       with Cryptographic Implementation and Cross-Model Calibration}
+
+\author{Marcelo Fernandez\\
+        \small TraslaIA\\
+        \small \texttt{info@traslaia.com}}
+\date{}
+
+% =============================================================================
+\begin{document}
+\maketitle
+
+% --- Abstract -----------------------------------------------------------------
+\begin{abstract}
+\noindent
+A correctly governed LLM agent can reach a state in which neither continuing
+execution nor automatically halting is admissible: the system has detected a
+persistent failure of its observability or drift-detection layer, but cannot
+itself decide who has the authority to resume, deny, or recalibrate the
+deployment. We call this an \emph{identity-bound governance event}, and we
+formalise the mechanism that resolves it.
+
+We introduce the \emph{Accountability Proof Block} ($\APB$), a two-part
+record consisting of a system-constructed evidence block $\Es$, a
+human-supplied decision block $\Dh$, and a cryptographic signature $\sigh$
+binding the two to a registered principal $\Hi \in \Pset$. The system can
+construct $\Es$ but cannot forge $\sigh$ (it lacks the principal's secret
+key); the principal can issue $\Dh$ but cannot alter $\Es$ undetected (the
+signature covers both).
+We prove four theorems about this construction:
+\emph{Governance Completeness} (every halt resolves through either the
+recovery loop or a signed APB), \emph{Non-Repudiability} (no principal can
+deny a governance act for which a valid APB exists),
+\emph{Impossibility of Anonymous Re-Authorization} (the execution layer
+cannot generate a valid APB without the principal's private credential),
+and \emph{Finite-Time APB Construction Termination}.
+
+We provide a real-cryptography implementation in
+\texttt{cryptography/ed25519}, expose the result through an Authority
+Resolution Function $G$, and validate the construction empirically. With a
+MockLLM stack across $10$ seeds and $10{,}000$ steps, governance completeness
+holds identically under two threshold policies ($3{,}812$ halt events,
+zero unresolved cases). Across $9$ adversarial vectors against
+$200$ freshly-signed APBs, the verifier achieves $100.0000\%$ detection.
+A cross-model study of six open LLMs (\texttt{mistral}, \texttt{deepseek-r1},
+\texttt{gemma}, \texttt{gpt-oss}, \texttt{qwen}, \texttt{llama3}) finds
+that the model-specific drift threshold $\Tstar$ is stable within model
+($\sigma/\Tstar < 2\%$ for all measurable cases) but varies across models
+by a factor of $1.7\times$, refuting any size-monotone hypothesis: the
+largest model in our sample is the one that does not drift within the
+$500$-step window. A temperature sweep across three of those models at
+$T \in \{0.2, 0.4, 0.6, 0.8\}$ replicates the temperature-insensitivity
+conjecture for the two fast-drifting models (per-model range $\le 5$
+steps) but reveals a \emph{drift-floor effect} for the slow-drifter
+($T^*$ range of $51$ steps for \texttt{gemma4}). We conclude that
+$\Tstar$ must be \emph{measured} per deployment --- not predicted from
+architecture, and not assumed temperature-invariant for slow-drifting
+models --- and that the APB is the operational vehicle by which that
+measured threshold yields accountable authority transfer.
+\end{abstract}
+
+% =============================================================================
+\section{Introduction}
+\label{sec:intro}
+
+The deployment of LLM-based autonomous agents in environments where their
+actions have real-world consequences raises a question that prompt-level
+guards and policy engines do not answer: \emph{when an agent's runtime
+governance system declares that it can no longer act safely, who is
+empowered to lift that halt, and what record must they leave behind?}
+
+We refer to this question as the problem of \emph{identity-bound
+governance under execution uncertainty}. It is the structural complement
+to the empirical observation, established in prior work in this series
+\citep{fernandez2026applied}, that runtime drift and partial observability
+generate halts that the recovery loop cannot itself resolve. Once such a
+halt is persistent in the formal sense (\S\ref{sec:framework}), the system
+is by design unable to issue a unilateral resumption: doing so would
+constitute a recalibration of its own authority, which the design
+constraints of \citep{fernandez2026applied} forbid.
+
+The standard accountability mechanisms in deployed AI systems are not a
+solution to this problem. Documentation artefacts such as model cards
+\citep{mitchell2019model} and OpenAI's system cards
+\citep{openai2024systemcard} are static; they describe behaviour at training
+or deployment time, not at the moment of an unexpected halt. Alignment
+techniques such as constitutional AI \citep{bai2022constitutional} bias the
+agent's behaviour but do not provide a non-repudiable record of the
+human decisions that surround a deployment. Compliance audit trails as
+mandated by GDPR, SOX, or PCI-DSS are typically post-hoc and not
+cryptographically bound to specific runtime events. None of these
+mechanisms provides a per-event, identity-bound, cryptographically
+verifiable record that the system itself cannot forge.
+
+\paragraph{Contributions.}
+This paper introduces the \emph{Accountability Proof Block} ($\APB$) as
+the formal object that fills this role, and validates it empirically.
+Specifically:
+
+\begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=2pt]
+  \item We define the Principal Set $\Pset$, the Authority Resolution
+        Function $G$, and the APB structure
+        $\APB = (\Es, \Dh, \sigh)$ formally
+        (\S\ref{sec:framework}), and we make the threat model explicit:
+        five attacker classes, with the boundary between what the APB
+        defends against and what it does not made precise.
+  \item We prove four theorems (\S\ref{sec:theorems}):
+        \emph{Governance Completeness} (T8.1),
+        \emph{Non-Repudiability} (T8.2),
+        \emph{Impossibility of Anonymous Re-Authorization} (T8.3),
+        and \emph{Finite-Time APB Construction Termination} (T8.4).
+        Each is supported by auxiliary lemmas that decompose the
+        argument.
+  \item We provide a real-cryptography implementation
+        (\S\ref{sec:impl}) using $\text{ed25519}$ signatures over a
+        canonical JSON encoding, with a Principal Registry, a
+        verifier that distinguishes failure modes, and an
+        append-only log with HMAC chaining for persistence.
+  \item We validate the construction empirically through four
+        experiments (\S\ref{sec:exp_a}--\S\ref{sec:exp_d}):
+        Governance Completeness over $10$ seeds and two threshold
+        policies; APB Integrity under nine adversarial vectors;
+        cross-model $\Tstar$ across six open LLM families; and
+        temperature insensitivity across three of those families
+        and four sampling temperatures.
+  \item We extract \emph{Proposition~5.1} (\S\ref{sec:prop_calibration})
+        as an operational design recipe: given a measured $\Tstar$
+        for a model, the persistence window $\Delta T$ that the
+        execution layer uses to classify a halt as a governance event
+        admits a calibrated range. We discuss what this means for
+        deployments where $\Tstar$ is not finite (one of our six
+        models did not drift within the experimental window).
+\end{enumerate}
+
+\paragraph{Independence from prior work.}
+Although this paper sits in the \emph{Agent Governance} series, its claims
+do not depend on the empirical results of prior papers. The formal
+framework, the theorems, and all four experiments are self-contained:
+fresh evidence is generated under identical software but different runs,
+and the cryptographic claims are entirely new (no cryptography appears
+in P0--P7). Where prior work is referenced (notably the design constraints
+DC.1 and DC.2 of \citep{fernandez2026applied}), the references are
+contextual rather than constitutive.
+
+\paragraph{Roadmap.}
+\S\ref{sec:related} situates the APB against existing accountability
+mechanisms. \S\ref{sec:framework} introduces the Principal Set, the
+Authority Resolution Function, and the APB structure. \S\ref{sec:theorems}
+proves the four theorems. \S\ref{sec:impl} describes the implementation
+and the threat model boundary. \S\ref{sec:exp_a}--\S\ref{sec:exp_d}
+report the four validation experiments. \S\ref{sec:discussion} discusses
+limitations and integration paths. \S\ref{sec:conclusion} concludes.
+
+% =============================================================================
+\section{Related Work}
+\label{sec:related}
+
+We organise prior work along the dimensions that the APB engages
+simultaneously: \emph{runtime}, \emph{cryptographic},
+\emph{identity-bound}, and \emph{LLM-agent specific}. To our knowledge no
+existing mechanism combines all four; Table~\ref{tab:related} maps the
+landscape.
+
+\begin{table}[t]
+\centering
+\caption{Accountability mechanisms relevant to LLM agent governance,
+characterised by whether they operate at runtime, are cryptographic,
+bind to a specific human identity, and are designed for the LLM-agent
+setting. The APB is, to our knowledge, the first construction that
+satisfies all four.}
+\label{tab:related}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Mechanism & Runtime & Crypto & Identity-bound & LLM-agent specific \\
+\midrule
+Model / system cards \citep{mitchell2019model,openai2024systemcard}
+        & --- & --- & --- & \checkmark \\
+Constitutional AI \citep{bai2022constitutional}
+        & \checkmark & --- & --- & \checkmark \\
+Compliance audit trails (GDPR, SOX)
+        & \checkmark & --- & --- & --- \\
+Smart-contract logs \citep{wood2014ethereum}
+        & \checkmark & \checkmark & \checkmark & --- \\
+Threshold signatures \citep{boneh2018compact}
+        & --- & \checkmark & \checkmark & --- \\
+\textbf{APB (this work)}
+        & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Documentation-based.}
+Model cards \citep{mitchell2019model}, system cards
+\citep{openai2024systemcard}, and data sheets are static artefacts
+authored prior to deployment. They describe what an agent is supposed
+to do or not do; they do not record what a specific human authorised
+the agent to resume after a halt at $t = t_e$.
+
+\paragraph{Alignment-based.}
+Constitutional AI \citep{bai2022constitutional} and RLHF approaches
+shape the agent's behaviour at training time. They affect \emph{how}
+the agent acts but not \emph{who} authorised a recovery decision.
+The APB is orthogonal: it does not constrain the agent's behaviour;
+it constrains the act of re-authorising the agent.
+
+\paragraph{Audit-trail and compliance.}
+Regulatory audit trails (GDPR Article 30, SOX section 404, PCI-DSS)
+log access events but typically lack cryptographic binding to a
+specific human credential at the moment of decision. Recent work on
+verifiable audit logs \citep{transparencylog2014} brings cryptographic
+guarantees to logs themselves, but does not address per-event
+authorisation by named principals.
+
+\paragraph{Smart contracts and on-chain governance.}
+Smart-contract execution \citep{wood2014ethereum} and on-chain DAO
+governance produce records that are runtime, cryptographic, and
+identity-bound. They are, however, not designed for LLM-agent runtime
+state: they bind to wallet addresses (which are not the same as
+human identities), assume a public ledger, and are not intended to
+operate at the latency of an in-process governance event. The APB
+borrows the cryptographic-binding insight while keeping the
+deployment local.
+
+\paragraph{Threshold and multi-signature schemes.}
+Threshold and multi-signature constructions
+\citep{boneh2018compact,gennaro2018fast} address \emph{which}
+principals must concur before an action is authorised. They
+complement the APB rather than replace it: \S\ref{sec:framework}
+notes that an APB-typed governance event may require $k$-of-$n$
+signatures, in which case each cosigner contributes their own
+$\sigh$ over the same canonical $(\Es \,\Vert\, \Dh)$ payload.
+
+\paragraph{Position.}
+The APB is, to our knowledge, the first construction that is
+simultaneously runtime, cryptographic, identity-bound, and designed
+for LLM-agent governance. The closest analogues are smart-contract
+logs (which lack the LLM-agent fit) and threshold signatures (which
+are a sub-component, not a complete governance mechanism).
+
+% =============================================================================
+\section{Formal Framework}
+\label{sec:framework}
+
+\subsection{Setting and Inherited Constraints}
+\label{sec:setting}
+
+We assume an agent system whose execution layer maintains a runtime
+admission snapshot $\Azero$, a drift estimator $\Dhat(t)$ with
+threshold $\theta$, and a halt mechanism that may emit
+$\HALT$ when its observability or risk-attribution gates fail.
+Two design constraints from prior work in the series
+\citep{fernandez2026applied} are inherited verbatim:
+\begin{description}[leftmargin=2em, topsep=2pt]
+  \item[DC.1 (Separation of Recalibration Authority).]
+        For all $t$, $\Azero(t) = \Azero(0)$. The execution layer
+        is forbidden from modifying its own admission baseline at
+        runtime.
+  \item[DC.2 (Drift Event Classification).]
+        A halt is \emph{transient} if $\Dhat(\tau) \geq \theta$ for
+        $\tau$ within a bounded window $\Delta T$ and returns below
+        $\theta$ thereafter; it is \emph{persistent} if
+        $\Dhat(t) \geq \theta$ for all $t \in [t_0, t_0 + \Delta T]$.
+        Transient halts route to the recovery loop; persistent halts
+        constitute \emph{governance events}.
+\end{description}
+
+DC.1 implies that, when a persistent halt occurs, the system cannot
+recalibrate its own $\Azero$ to clear the halt. DC.2 routes such halts
+out of the execution layer's authority. The role of this paper is to
+specify what is on the other side of that boundary.
+
+\subsection{Principal Set $\Pset$}
+\label{sec:principals}
+
+\begin{definition}[Principal Set]
+\label{def:principals}
+The \emph{Principal Set} of a governed system is a finite set
+$\Pset = \{H_1, \ldots, H_n\}$ of identity-bound human principals.
+Each $\Hi$ has a public verification key $\pki$ and an associated
+private signing key $\ski$ held exclusively by $\Hi$. The mapping
+$H_i \mapsto \pki$ is recorded in a registry that the execution layer
+treats as read-only.
+\end{definition}
+
+DC.1 specialised to $\Pset$: the registry is fixed at $\Azero$
+construction time, and any modification to it is itself a governance
+event of type $\RECAL$. We thus obtain a self-referential modification
+discipline --- $\Pset$ is mutable only through APBs that authorise
+its mutation.
+
+\paragraph{Revocation.}
+A principal may be revoked. We model revocation by recording a
+timestamp of revocation; APBs signed before the revocation timestamp
+remain verifiable (with a flag indicating the principal's later
+revoked status), while APBs signed after are rejected at verification
+time. This historical-validity discipline is enforced by the
+predicate $\mathrm{is\_active}(\Hi, t_e)$ used by the verifier
+(\S\ref{sec:impl}).
+
+\subsection{Authority Resolution Function $G$}
+\label{sec:G}
+
+\begin{definition}[Authority Resolution Function]
+\label{def:G}
+$G : \Pset \times \mathcal{S} \times \mathcal{E}
+   \to \{\RESUME, \DENY, \RECAL\}$,
+where $\mathcal{S}$ denotes the space of system runtime states and
+$\mathcal{E}$ the space of governance evidence packages. $G$ is the
+governance-layer analog of the runtime authority function $F$ of
+\citep{fernandez2026applied}: it constructs authority from human
+attestation over a defined evidence set, not from sensor state.
+The output $\RECAL$ is the only authorised path by which $\Azero$
+may change after initialisation; $\RESUME$ permits a single
+resumption under stated scope; $\DENY$ permanently bars the queried
+action.
+\end{definition}
+
+The APB is the recorded artefact that witnesses an evaluation of
+$G$.
+
+\subsection{Accountability Proof Block (APB)}
+\label{sec:apb}
+
+\begin{definition}[APB]
+\label{def:apb}
+An \emph{Accountability Proof Block} signed by principal $\Hi$ is a
+triple
+\[
+  \APB \;=\; (\Es,\;\Dh,\;\sigh)
+\]
+where
+\begin{align*}
+  \Es &= (\mathrm{hash}(\Azero),\; \Dhat(t_e),\; t_e,\;
+         \mathrm{hash}(\mathrm{trace}_{\le t_e}),\; \mathrm{cause})
+         \quad\text{(System Evidence Block)}\\
+  \Dh &= (\Hi,\;\mathrm{decision},\;\mathrm{rationale},\;\mathrm{scope})
+         \quad\text{(Human Decision Block)}\\
+  \sigh &= \mathrm{Sign}_{\ski}\!\bigl(\,
+            \mathrm{canon}(\Es) \,\Vert\, \mathrm{canon}(\Dh)
+            \,\bigr)
+         \quad\text{(Signature)}
+\end{align*}
+$\mathrm{canon}(\cdot)$ denotes a canonical (sort-keyed, fixed-encoding)
+serialisation; $\mathrm{Sign}$ is the ed25519 signature operation.
+\end{definition}
+
+The construction has three structural properties enforced by its
+typing alone:
+
+\begin{enumerate}[leftmargin=2em, topsep=2pt]
+  \item Only the execution layer can correctly produce $\Es$: it is the
+        only party that holds $\Azero$, $\Dhat$, and the trace.
+  \item Only $\Hi$ can produce $\sigh$: it is the only party that holds
+        $\ski$.
+  \item $\sigh$ covers both $\Es$ and $\Dh$: any modification to either
+        invalidates the signature.
+\end{enumerate}
+
+\subsection{Threat Model}
+\label{sec:threat}
+
+The APB is designed to defeat a specific class of attackers; we make
+the boundary of its protection explicit. Five actor classes are
+considered.
+
+\begin{description}[leftmargin=2em, topsep=2pt]
+  \item[A1. External attacker.] No system access. Goal: forge an APB
+        attributed to $\Hi$. Defence: T8.3 (\S\ref{sec:theorems}).
+  \item[A2. Compromised system process.] Has runtime access to the
+        execution layer but does not hold $\ski$ for any
+        $\Hi \in \Pset$. Goal: synthesise a $\sigh$ that verifies
+        against some registered $\pki$. Defence: T8.3.
+  \item[A3. Replay attacker.] Holds a previously-valid APB and tries
+        to use it in a new context. Defence: $t_e \in \Es$ plus the
+        verifier's age check (\S\ref{sec:impl}).
+  \item[A4. Man-in-the-middle.] Intercepts an APB in transit and tries
+        to modify either $\Es$ or $\Dh$ before delivery. Defence:
+        $\sigh$ covers both blocks, so any tampering invalidates
+        verification.
+  \item[A5. Compromised principal.] Has obtained $\ski$ for some
+        $\Hi$. \emph{Out of scope.} The APB cryptographically binds
+        decisions to keys; if a key is compromised, the binding
+        attaches to the compromised key. Mitigation lies outside
+        the APB protocol (multi-signature, key rotation,
+        out-of-band review).
+\end{description}
+
+\subsubsection{What APB Does Not Prevent}
+The APB is an \emph{accountability} mechanism, not an
+\emph{access-control} mechanism. A principal $\Hi$ holding a valid
+$\ski$ can sign any $\Dh$ they wish, including a malicious one, and
+the resulting APB will verify cryptographically. What the APB
+ensures, against this case, is that:
+\begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=1pt]
+  \item the malicious decision is attributable to $\Hi$ and cannot
+        be denied (T8.2);
+  \item the system itself did not synthesise the decision behind
+        $\Hi$'s back (T8.3).
+\end{enumerate}
+Mitigations for adversarial principals (multi-signature, separation
+of duties, out-of-band review) are configurable on top of the APB
+but are not part of the APB protocol itself. We return to this
+distinction in the discussion (\S\ref{sec:discussion}).
+
+% =============================================================================
+\section{Theorems}
+\label{sec:theorems}
+
+We prove four theorems about the APB. The first three are
+properties promised in the framework section of
+\citep{fernandez2026applied}; we restate them precisely and give full
+proofs. The fourth (T8.4) is new: it establishes that the construction
+of $\Es$ terminates in bounded time, which is required for T8.1 to be
+non-vacuous.
+
+\subsection{T8.1 --- Governance Completeness}
+\label{sec:t81}
+
+\begin{theorem}[Governance Completeness]
+\label{thm:completeness}
+Let $h$ be a $\HALT$ event emitted by an execution layer satisfying
+DC.1 and DC.2. Then exactly one of the following resolutions holds:
+\begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=1pt]
+  \item[(R1)] $h$ is transient under DC.2 and the recovery loop
+        produces a $\RESUME$ within its bounded attempt budget;
+  \item[(R2)] $h$ is persistent under DC.2 and a valid signed
+        $\APB$ is produced through an evaluation of $G$.
+\end{enumerate}
+No third resolution path exists.
+\end{theorem}
+
+\begin{proof}
+By DC.2, $h$ is exactly one of \emph{transient} or \emph{persistent}.
+Case (transient): the recovery loop is defined for transient halts
+(\citep{fernandez2026applied}, P6 Recovery Loop) and terminates in at
+most $k$ attempts with a $\RESUME$, $\HALT$, or $\DENY$ outcome on the
+augmented state. If the outcome is $\RESUME$, we are in case (R1).
+If the outcome on the augmented state is $\HALT$ or $\DENY$, the halt
+is reclassified as persistent (the recovery loop has exhausted the
+ways in which the halt could be transient), reducing to the persistent
+case below.
+Case (persistent): by DC.1 the execution layer cannot modify $\Azero$
+to clear the halt; the only authorised path to a state in which
+execution may continue is an output of $G$. By Theorem~\ref{thm:t84}
+below, $\Es$ can be constructed in finite time. By
+Definition~\ref{def:apb}, given $\Es$ and a principal $\Hi$ with valid
+$\ski$, an APB is produced. We are in case (R2).
+The two cases are exhaustive (DC.2) and disjoint (the recovery loop's
+output of $\RESUME$ excludes persistence within the same window).
+Therefore no third resolution exists.
+\end{proof}
+
+\begin{lemma}[Resolution Path Exhaustivity]
+\label{lem:exhaustivity}
+The recovery loop's exit set $\{\RESUME, \HALT, \DENY\}$ partitions
+the post-halt state space into transient ($\RESUME$) and
+persistent ($\HALT \cup \DENY$). The latter is exactly the
+domain of $G$.
+\end{lemma}
+
+\begin{proof}
+The recovery loop's outputs are mutually exclusive by construction
+(it returns at most one). Definition of transient (DC.2): the drift
+estimator returned below threshold within $\Delta T$, observable by
+the recovery loop's own measurements. If $\RESUME$, by P6 the loop
+has confirmed observability is restored, hence transient. If $\HALT$
+or $\DENY$, the loop has confirmed it cannot resolve, hence
+persistent.
+\end{proof}
+
+\subsection{T8.2 --- Non-Repudiability}
+\label{sec:t82}
+
+\begin{theorem}[Non-Repudiability]
+\label{thm:nonrep}
+Let $\APB = (\Es, \Dh, \sigh)$ be a verifiable APB whose $\Hi$ field
+in $\Dh$ identifies a registered, non-revoked principal at $t_e$, and
+let $\sigh$ verify against $\pki$. Then no efficient adversary can
+produce a $\Dh' \neq \Dh$ on $\Es$ that also verifies under $\pki$,
+except with negligible probability.
+\end{theorem}
+
+\begin{proof}
+Verification of an APB requires that
+$\sigh = \mathrm{Sign}_{\ski}(\mathrm{canon}(\Es) \,\Vert\,
+\mathrm{canon}(\Dh))$. Suppose, for contradiction, that an adversary
+produces $\APB' = (\Es, \Dh', \sigh)$ with $\Dh' \neq \Dh$ that
+verifies. Because $\sigh$ is a fixed value and the canonical
+serialisation is injective on dataclass content (Lemma~\ref{lem:integrity}),
+$\mathrm{canon}(\Dh') \neq \mathrm{canon}(\Dh)$, so the message under
+the signature differs. A successful verification of $\sigh$ over the
+new message contradicts the existential unforgeability of ed25519
+under chosen-message attack
+\citep{bernstein2012highspeed,boneh2014foundations}. This event has
+negligible probability in the security parameter.
+\end{proof}
+
+\begin{lemma}[$\Es$ Post-Construction Integrity]
+\label{lem:integrity}
+The canonical encoding $\mathrm{canon}$ used in the APB construction
+is collision-resistant on dataclass content: distinct values of the
+five $\Es$ fields produce distinct byte-strings.
+\end{lemma}
+
+\begin{proof}
+$\mathrm{canon}$ is JSON with sorted keys, fixed-encoding numeric
+representation, and UTF-8 string encoding. JSON with sorted keys is
+injective on dataclass content with primitive-type fields
+\citep{rfc8259}. Each $\Es$ field is a primitive (string or float),
+so the encoding is injective.
+\end{proof}
+
+\begin{lemma}[Signature Verifiability Under Tamper]
+\label{lem:tamper}
+Let $\APB$ verify against $\pki$ with original $\Es$. For any
+modification of $\Es$ to $\Es' \neq \Es$, retaining $\sigh$ and $\Dh$,
+the modified APB does not verify under $\pki$.
+\end{lemma}
+
+\begin{proof}
+By Lemma~\ref{lem:integrity}, $\mathrm{canon}(\Es') \neq
+\mathrm{canon}(\Es)$, hence the message under verification differs
+from the message that was signed. Verification of an ed25519
+signature against a different message succeeds only with negligible
+probability.
+\end{proof}
+
+\subsection{T8.3 --- Impossibility of Anonymous Re-Authorization}
+\label{sec:t83}
+
+\begin{theorem}[Impossibility of Anonymous Re-Authorization]
+\label{thm:anonimp}
+Let an adversary $\mathcal{A}$ have full read and write access to the
+execution layer's runtime state but not hold $\ski$ for any
+$\Hi \in \Pset$. Then $\mathcal{A}$ cannot produce a verifying APB
+attributed to any registered principal, except with negligible
+probability.
+\end{theorem}
+
+\begin{proof}
+A verifying APB requires $\sigh$ such that
+$\mathrm{Verify}_{\pki}(\sigh, \mathrm{canon}(\Es) \,\Vert\,
+\mathrm{canon}(\Dh)) = \top$ for some registered $\pki$. The
+adversary may construct $\Es$ and $\Dh$ at will; the question is
+whether they can produce $\sigh$. Lemma~\ref{lem:forge} establishes
+that producing such a $\sigh$ without access to $\ski$ requires
+breaking the existential unforgeability of ed25519, which is
+infeasible under the discrete log assumption on the curve25519
+group \citep{bernstein2012highspeed}.
+\end{proof}
+
+\begin{lemma}[Attribution Uniqueness]
+\label{lem:attribution}
+A verifying APB uniquely identifies a registered principal: there is
+no efficient way to produce an APB whose $\sigh$ verifies under two
+distinct registered $\pki$ simultaneously.
+\end{lemma}
+
+\begin{proof}
+Two distinct ed25519 public keys verify the same signature over the
+same message only with negligible probability (the signature is bound
+to the secret key, and finding a colliding key pair reduces to
+solving discrete log on the curve).
+\end{proof}
+
+\begin{lemma}[Forge Resistance under Computational Hardness]
+\label{lem:forge}
+Any polynomial-time algorithm that produces a verifying $\sigh$ over
+a chosen message without access to $\ski$ has success probability
+negligible in the security parameter.
+\end{lemma}
+
+\begin{proof}
+This is the standard EUF-CMA property of ed25519 over the
+curve25519 group, established under the discrete-log assumption
+\citep{bernstein2012highspeed,boneh2014foundations}.
+\end{proof}
+
+\subsection{T8.4 --- Finite-Time APB Construction Termination}
+\label{sec:t84}
+
+\begin{theorem}[Finite-Time APB Construction Termination]
+\label{thm:t84}
+For any persistent halt event $h$ on a system with bounded admission
+snapshot $\Azero$ and bounded trace $\mathrm{trace}_{\le t_e}$, the
+construction of $\Es$ terminates in time bounded by
+$O(|\Azero| + |\mathrm{trace}_{\le t_e}|)$.
+\end{theorem}
+
+\begin{proof}
+By Definition~\ref{def:apb}, $\Es$ has five fields:
+$\mathrm{hash}(\Azero)$, $\Dhat(t_e)$, $t_e$,
+$\mathrm{hash}(\mathrm{trace}_{\le t_e})$, and $\mathrm{cause}$.
+Lemma~\ref{lem:bounded_count} establishes that the field count is
+fixed; Lemma~\ref{lem:bounded_capture} establishes that each field's
+capture time is bounded. Their conjunction gives the stated bound.
+\end{proof}
+
+\begin{lemma}[Bounded $\Es$ Field Count]
+\label{lem:bounded_count}
+The number of fields in $\Es$ is fixed at five and does not depend
+on runtime state.
+\end{lemma}
+
+\begin{proof}
+By Definition~\ref{def:apb}, fixed at compile time.
+\end{proof}
+
+\begin{lemma}[Bounded Capture Time Per Field]
+\label{lem:bounded_capture}
+Each of the five $\Es$ fields can be computed in time bounded
+linearly in the size of its underlying input:
+$\mathrm{hash}(\Azero)$ in $O(|\Azero|)$;
+$\Dhat(t_e)$ in $O(1)$ (already computed by the IML monitor);
+$t_e$ in $O(1)$;
+$\mathrm{hash}(\mathrm{trace}_{\le t_e})$ in $O(|\mathrm{trace}_{\le t_e}|)$;
+$\mathrm{cause}$ in $O(1)$ (a fixed-vocabulary string).
+\end{lemma}
+
+\begin{proof}
+SHA-256 is linear in input size; the remaining operations are
+elementary.
+\end{proof}
+
+% =============================================================================
+\section{Implementation}
+\label{sec:impl}
+
+We provide a real-cryptography reference implementation of the APB
+in Python on top of the existing governance stack of
+\citep{fernandez2026applied}. All four theorems' empirical claims
+(\S\ref{sec:exp_a}--\S\ref{sec:exp_d}) are verified against this
+implementation.
+
+\paragraph{Cryptography.}
+We use ed25519 from the \texttt{cryptography} library
+\citep{cryptographylib}, version $\geq 42$. Each $\Hi \in \Pset$ has a
+$32$-byte private key (held only by $\Hi$) and a $32$-byte public key
+held in the registry. Signatures are $64$ bytes. Canonical
+serialisation uses Python's \texttt{json.dumps} with
+\texttt{sort\_keys=True} and the compact separators
+\texttt{(",", ":")}.
+
+\paragraph{Modules.}
+Four new modules implement the framework
+(see Table~\ref{tab:modules}).
+
+\begin{table}[t]
+\centering
+\caption{Implementation modules introduced in this work.
+LOC counts include docstrings.}
+\label{tab:modules}
+\small
+\begin{tabular}{lrl}
+\toprule
+Module & LOC & Responsibility \\
+\midrule
+\texttt{agent/principal.py}        & 140 & Principal Set $\Pset$, keypair generation, registry, revocation. \\
+\texttt{stack/apb.py}              & 200 & $\Es$, $\Dh$, $\APB$ classes; canonical encoding; signing. \\
+\texttt{stack/apb\_verifier.py}    & 140 & 4-predicate verification; failure-mode enum; attribution. \\
+\texttt{stack/governance\_layer.py}& 190 & Authority Resolution Function $G$; built-in policies. \\
+\midrule
+Total                              & 670 & Plus 61 unit tests over the four modules. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Verifier predicates.}
+The verifier evaluates four predicates against an APB and a
+registry, and returns the first failing predicate (or VALID):
+\begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=1pt]
+  \item[V1.] The signed message verifies against $\pki$ for the
+        $\Hi$ named in $\Dh$.
+  \item[V2.] $\Hi$ is in the registry.
+  \item[V3.] $\Hi$ was active at $t_e$ (not revoked before signing).
+  \item[V4.] $t_e$ lies within an acceptable window relative to the
+        verification time (replay defence).
+\end{enumerate}
+The enumerated failure modes (\texttt{INVALID\_SIGNATURE},
+\texttt{PRINCIPAL\_NOT\_FOUND}, \texttt{PRINCIPAL\_REVOKED},
+\texttt{REPLAY}, \texttt{MALFORMED}) allow Experiment~B
+(\S\ref{sec:exp_b}) to count detection rates per attack class.
+
+\paragraph{Persistence.}
+APBs are persisted in append-only JSONL files with HMAC chaining:
+each entry's HMAC is computed over the previous entry's HMAC
+concatenated with the current entry's canonical bytes. This gives
+log-level tamper evidence orthogonal to the per-APB signature: any
+deletion or reordering of entries breaks the chain. We do not use a
+Merkle tree in this implementation (it adds machinery for a
+distributed-log scenario that the present paper does not need); we
+note in \S\ref{sec:discussion} that a Merkle structure is the
+natural extension for distributed deployments.
+
+\paragraph{Decision policies.}
+We provide three built-in \texttt{DecisionPolicy} callables that the
+governance layer can route to: \texttt{always\_resume},
+\texttt{always\_deny}, and \texttt{threshold\_policy(deny\_above,
+recalibrate\_above)}. The threshold policy issues $\RESUME$ when
+$\Dhat(t_e) <$ \texttt{deny\_above}; $\DENY$ when
+$\texttt{deny\_above} \le \Dhat(t_e) <$ \texttt{recalibrate\_above};
+$\RECAL$ otherwise. The choice of $(\theta_d, \theta_r)$ is operator
+configuration; Experiment~A (\S\ref{sec:exp_a}) shows that
+governance completeness is invariant under this choice.
+
+\subsection{Proposition 5.1 --- $\Tstar$ Calibration}
+\label{sec:prop_calibration}
+
+\begin{proposition}[$\Tstar$ Calibration Range]
+\label{prop:calibration}
+Let model $M$ have measured drift threshold $\Tstar_M$ with run-to-run
+standard deviation $\sigma_M$. The persistence window $\Delta T$ in
+DC.2 satisfies the calibration criterion if
+\[
+   k_1 \cdot \sigma_M \;\le\; \Delta T \;\le\; k_2 \cdot \Tstar_M,
+\]
+with $k_1 \geq 3$ to bound the false-positive rate below the run-to-run
+noise of $\Tstar$ and $k_2 \leq 0.5$ so that the persistence window
+declares a halt before the measured drift threshold is reached.
+\end{proposition}
+
+This is a design recipe rather than a deductive theorem: $k_1$ and
+$k_2$ are operator choices reflecting tolerance to false positives
+and false negatives respectively. The empirical content of
+Proposition~\ref{prop:calibration} is the claim that the range
+$[k_1 \sigma_M, k_2 \Tstar_M]$ is non-empty for the models we
+measure --- equivalently, that $\sigma_M / \Tstar_M$ is small. We
+verify this in \S\ref{sec:exp_c} for five of the six models in our
+study; one model does not drift within the experimental window
+and is treated separately in \S\ref{sec:discussion}.
+
+% =============================================================================
+\section{Experiment A: Governance Completeness}
+\label{sec:exp_a}
+
+\paragraph{Goal.} Empirical demonstration that T8.1 holds: every
+runtime halt produced by the governance stack resolves through either
+the recovery loop (R1) or a signed APB (R2), with no third path
+observed.
+
+\paragraph{Setup.} The full stack
+$\text{ACP} + \text{IML} + \text{RAM} + \text{RecoveryLoop} +
+\text{GovernanceLayer}$ is run for $1000$ steps per seed (50-step
+burn-in plus 950 drift steps), with $10$ seeds (\texttt{42}--\texttt{51}),
+coverage $0.70$, $\theta = 0.20$, and a single principal
+$H_{\mathrm{alice}}$ in $\Pset$. Whenever the recovery loop returns
+$\HALT$ or $\DENY$ on a halt, the governance layer is invoked with a
+threshold-based decision policy; the resulting APB is verified
+through the verifier (V1--V4) before being recorded.
+
+\paragraph{Policy sensitivity.} We run the same stack under two
+threshold policies. The \emph{default} policy uses
+$(\theta_d, \theta_r) = (0.40, 0.70)$, which causes essentially all
+governance events to receive $\RESUME$ given the empirical $\Dhat$
+distribution under this protocol. The \emph{low-threshold} policy
+uses $(0.25, 0.32)$, which exercises the full
+$\{\RESUME, \DENY, \RECAL\}$ output range. Both policies are run
+against the same seeds.
+
+\paragraph{Result.} Table~\ref{tab:exp_a_completeness_default}
+reports the per-seed and aggregate counts for the default policy.
+Across $10$ seeds and $3{,}812$ halt events, every halt resolves through
+exactly one of the two paths; no third path is observed. The
+\emph{neither} count, which would witness a violation of T8.1, is
+zero. Table~\ref{tab:exp_a_policy_comparison} shows that the
+low-threshold policy produces an identical halt count and an identical
+APB count, but a different distribution of decisions
+($1037$ $\RESUME$ / $727$ $\DENY$ / $36$ $\RECAL$ instead of
+$1800 / 0 / 0$): completeness is policy-invariant; the decision
+distribution is not.
+
+\input{exp_a_table_default}
+
+\input{exp_a_policy_comparison}
+
+\paragraph{Reading.} The two tables together separate two distinct
+empirical claims. T8.1 is about \emph{path exhaustivity}: every halt
+ends through R1 or R2, never neither, regardless of operator policy.
+The decision distribution within R2 is a property of the policy, not
+of T8.1; the framework is policy-agnostic.
+
+% =============================================================================
+\section{Experiment B: APB Integrity}
+\label{sec:exp_b}
+
+\paragraph{Goal.} Empirical demonstration that T8.2 and T8.3 hold:
+no modification of an APB after signing is undetectable, and no
+forgery without $\ski$ verifies. We exercise nine adversarial vectors
+covering the threat-model classes A1--A4 of \S\ref{sec:threat}.
+
+\paragraph{Setup.} $200$ freshly-signed APBs are generated under
+varied evidence (each $\Es$ uses random $A_0$-hash, varying $\Dhat$
+across $[0.20, 0.45]$, and a current $t_e$). A baseline run confirms
+all $200$ untampered APBs verify cleanly. Each attack vector is then
+applied to each APB, and the verifier output is recorded.
+
+\paragraph{Vectors.}
+\begin{description}[leftmargin=2em, topsep=2pt, itemsep=1pt]
+  \item[A1.1--A1.5: tamper $\Es$ field-by-field.]
+        For each of the five $\Es$ fields
+        (\texttt{A\_0\_hash}, \texttt{D\_hat}, \texttt{t\_e},
+        \texttt{trace\_hash}, \texttt{cause}), substitute a
+        modified value while retaining $\Dh$ and $\sigh$.
+  \item[A2a: forge with random bytes.] Replace $\sigh$ with $64$
+        random bytes.
+  \item[A2b: forge with attacker keypair.] Re-sign
+        $\mathrm{canon}(\Es) \,\Vert\, \mathrm{canon}(\Dh)$ with a
+        freshly-generated key whose public counterpart is not in
+        $\Pset$.
+  \item[A3: identity swap.] Replace $\Hi$ in $\Dh$ with a different
+        registered principal, retaining $\sigh$.
+  \item[A4: replay.] Verify the (untampered) APB at a clock value
+        $t_e + 360\,\mathrm{s}$ with replay window $300\,\mathrm{s}$.
+\end{description}
+
+\paragraph{Result.} Table~\ref{tab:exp_b_integrity} reports the
+per-vector counts. Across $1{,}800$ attack attempts, the verifier
+detects every attack: $1800/1800$, $0$ misses, $100.0000\%$
+detection rate. T8.2 and T8.3 hold empirically.
+
+\input{exp_b_table}
+
+\paragraph{Reading.} The five $\Es$-tampering vectors collectively
+exercise Lemma~\ref{lem:tamper} on every $\Es$ field, witnessing
+T8.2. The two forgery vectors witness T8.3 (the system layer cannot
+produce a valid signature without $\ski$). The identity-swap vector
+witnesses Lemma~\ref{lem:attribution}: substituting $\Hi$ in $\Dh$
+without recomputing $\sigh$ under the new principal's key is detected.
+The replay vector witnesses the verifier's V4 predicate.
+
+% =============================================================================
+\section{Experiment C: Cross-Model $\Tstar$}
+\label{sec:exp_c}
+
+\paragraph{Goal.} Empirical characterisation of the model-specific
+drift threshold $\Tstar$ across six open LLM families and validation
+of the calibration criterion of Proposition~\ref{prop:calibration}.
+
+\paragraph{Setup.} Six models (\texttt{mistral:7b},
+\texttt{deepseek-r1:8b}, \texttt{gemma4:latest}, \texttt{gpt-oss:20b},
+\texttt{qwen2.5:7b}, \texttt{llama3.2:3b}) are run via Ollama through
+the LiveLLM tool selector, $50$-step burn-in plus $500$ drift steps,
+sampling temperature $T = 0.4$, $\theta = 0.20$, $3$ runs per model.
+$\Tstar$ is the first drift-step index at which $\Dhat \geq \theta$.
+
+\paragraph{Result.} Table~\ref{tab:exp_c_crossmodel} reports per-model
+$\Tstar$ and final $\Dhat$ values, sorted by parameter count. The
+intra-model coefficient of variation $\sigma/\Tstar$ is reported in
+the rightmost column.
+
+\input{exp_c_table}
+
+\paragraph{Reading.}
+Five of six models reach $\theta$ within the $500$-step window, with
+$\sigma/\Tstar$ between $0.00\%$ (perfect replication on
+\texttt{mistral:7b}) and $1.99\%$ (\texttt{gemma4}). For these five
+models, the calibration criterion $\sigma/\Tstar < 5\%$ of
+Proposition~\ref{prop:calibration} holds with substantial margin: the
+range $[k_1 \sigma_M, k_2 \Tstar_M] = [3 \sigma_M, 0.5 \Tstar_M]$
+is non-empty for every measured model.
+
+The sixth model, \texttt{gpt-oss:20b}, the largest in our sample at
+$20$B parameters, does not drift within the experimental window:
+final $\Dhat = 0.071 \pm 0.005$, well below $\theta = 0.20$.
+We discuss this case explicitly in \S\ref{sec:discussion}; for the
+purposes of T8.1's empirical verification it is sufficient to note
+that the calibration criterion is reported per-model rather than as
+a global property, and that the deployment recipe of
+Proposition~\ref{prop:calibration} requires a measured $\Tstar$
+before $\Delta T$ can be set.
+
+\paragraph{Family-wise consistency.}
+The Mistral family entry in our sample (\texttt{mistral:7b},
+$\Tstar = 157 \pm 0$) coincides with the Mistral-family $\Tstar$
+reported in \citep{fernandez2026applied} for a larger
+\texttt{mistral-small-3.1} model under the same protocol
+(\textit{T*} $= 156 \pm 1$). Two distinct sizes within the same
+family yield $\Tstar$ within one step, supporting the architectural
+rather than scale-driven character of the threshold.
+
+\paragraph{Refutation of size-monotonicity.}
+The largest model in the sample is the only one that does not drift.
+This refutes any monotone hypothesis under which larger models would
+be more (or less) susceptible to compliant drift than smaller ones.
+The empirical implication is that $\Tstar$ must be \emph{measured}
+per deployment rather than \emph{predicted} from architectural
+parameters.
+
+% =============================================================================
+\section{Experiment D: Temperature Insensitivity}
+\label{sec:exp_d}
+
+\paragraph{Goal.} Test the conjecture that $\Tstar$ is determined by
+the escalation protocol embedded in the system prompt rather than by
+LLM sampling stochasticity. Empirical translation: across a sweep
+of sampling temperatures, the per-model spread of mean $\Tstar$
+should be small.
+
+\paragraph{Setup.} Three models from \S\ref{sec:exp_c} are selected
+for diversity in baseline $\Tstar$: \texttt{mistral:7b} ($\Tstar = 157$,
+``fast cluster''), \texttt{llama3.2:3b} ($\Tstar = 151$,
+``fastest''), and \texttt{gemma4:latest} ($\Tstar = 264$,
+``slowest drifter''). Each is run at temperatures
+$T \in \{0.2, 0.4, 0.6, 0.8\}$, three runs per cell, $500$ drift
+steps, identical burn-in and $\theta$ to \S\ref{sec:exp_c}. The
+insensitivity criterion is that the per-model range
+$\max_T \Tstar(T) - \min_T \Tstar(T)$ across the four temperatures is
+at most $10$ steps.
+
+\paragraph{Result.} Table~\ref{tab:exp_d_temperature} reports the
+per-cell $\Tstar$ across the four temperatures and the resulting
+per-model range. The result is more nuanced than a single
+insensitivity claim: two of three models satisfy the criterion with
+substantial margin, and the third violates it.
+
+\input{exp_d_table}
+
+\paragraph{Reading.}
+For the two fast-drifting models, \texttt{llama3.2:3b} and
+\texttt{mistral:7b}, $\Tstar$ is strongly temperature-insensitive:
+the range across $T \in \{0.2, 0.4, 0.6, 0.8\}$ is $2$ and $5$ steps
+respectively, and the within-cell standard deviations are below
+$3$ steps for every $(model, T)$ pair. For these models the conjecture
+of \citep{fernandez2026applied} --- that $\Tstar$ is determined by the
+escalation protocol embedded in the system prompt rather than by
+sampling stochasticity --- replicates with substantial margin and
+generalises across families.
+
+For \texttt{gemma4}, the slow-drifting model in our sample, the
+picture is different. The per-cell mean at $T = 0.8$ rises to
+$290 \pm 18.4$ steps, against $239$--$255$ at the lower temperatures,
+giving a per-model range of $51$ steps and a within-cell standard
+deviation that is roughly three times larger than at $T \le 0.6$.
+The insensitivity criterion ($\text{range} \le 10$) is violated.
+
+\paragraph{Interpretation.}
+We read this as evidence for a \emph{drift-floor} effect: when a
+model's $\Tstar$ is close to the lower bound that the escalation
+protocol can produce, sampling temperature has little room to move
+the threshold. When $\Tstar$ is well above that floor (as in
+\texttt{gemma4}, whose $\Tstar$ is $1.7\times$ larger than the
+fast-cluster), the additional steps before threshold crossing
+admit cumulative sampling fluctuations that compound at higher
+temperatures. The relevant quantity is therefore not whether
+temperature insensitivity holds globally but whether a model's
+baseline $\Tstar$ sits in the deterministic regime; this is itself
+a measurable property of the deployment and feeds back into the
+calibration recipe of Proposition~\ref{prop:calibration} (a model
+in the non-deterministic regime requires a wider $k_1 \sigma_M$
+margin to absorb temperature-induced spread).
+
+\paragraph{Implication for governance.}
+Operators deploying models in the slow-drifting regime should not
+assume that a single-temperature characterisation of $\Tstar$
+generalises to other temperatures of the same model. Either the
+deployment temperature is fixed (and $\Tstar$ measured at that
+temperature suffices), or the calibration is performed at the
+operationally relevant temperature(s). For fast-drifting models,
+a single-temperature characterisation appears to be sufficient.
+
+% =============================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{Models that do not drift.}
+The case of \texttt{gpt-oss:20b} in \S\ref{sec:exp_c} merits explicit
+treatment. Under our $500$-step protocol the model's drift estimator
+remains well below threshold; we cannot, from this data alone,
+distinguish three explanations:
+(i) the model is architecturally robust to the specific escalation
+protocol embedded in the system prompt and would not drift at any
+reasonable horizon,
+(ii) the model has a genuinely larger $\Tstar$ that exceeds our
+window,
+(iii) the model's tool-selection distribution under our LiveLLM
+prompt is structurally different from the other five (e.g.\ a
+strong default toward low-risk actions that does not respond to
+context-pressure scaling).
+For deployment, this distinction matters: under (i) the model would
+not need an APB-emitting governance layer at all under this
+protocol, while under (ii) or (iii) the operator would extend the
+window or adapt the prompt. In either case, the implication for
+governance design is the same: $\Pset$ and $G$ are configured
+once; $\Delta T$ is configured per deployment from a measured
+$\Tstar$, with the explicit understanding that $\Tstar$ may be
+infinite or undefined for some models.
+
+\paragraph{Boundaries of the result.}
+The APB establishes accountability, not access control. A
+compromised principal can sign a malicious decision and the APB
+will record it. The mitigations are configurable around the APB,
+not within it: $k$-of-$n$ multi-signature for sensitive decisions,
+key rotation under $\RECAL$ governance events, and out-of-band
+review of recorded APBs against expected decision patterns.
+The proofs of T8.1--T8.4 rest on the security assumptions of
+ed25519 over curve25519. A break of those assumptions would
+invalidate the cryptographic guarantees but not the structural
+claims (T8.1 in particular is a partition argument that does not
+depend on the signature scheme).
+
+\paragraph{Integration paths.}
+Two integration directions are natural extensions and deferred to
+subsequent work. \emph{MCP/A2A integration}: the governance stack of
+\citep{fernandez2026applied} operates on tool-call traces from a
+LangGraph state graph; the Model Context Protocol and Agent-to-Agent
+communication standards define interception points at which the
+APB-emitting layer could be applied transparently to agent code.
+\emph{Distributed APB log}: replacing the JSONL+HMAC chain with a
+Merkle tree (and, for cross-organisational deployments, anchoring
+to a public transparency log) gives stronger tamper evidence under
+multi-writer scenarios.
+
+\paragraph{Choice of decision-policy thresholds.}
+Experiment~A's policy comparison shows that Governance Completeness
+is invariant under threshold choice. We do not, in this paper,
+prescribe a particular $(\theta_d, \theta_r)$. Their setting is a
+deployment decision tied to the operator's tolerance for halts that
+escalate to $\DENY$ versus $\RESUME$, and to the empirical
+distribution of $\Dhat$ at the moments of governance event in the
+operator's workload.
+
+% =============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have introduced the Accountability Proof Block as the formal
+mechanism by which an LLM agent's persistent halts resolve into
+identity-bound, cryptographically verifiable governance decisions.
+The construction is supported by four theorems --- governance
+completeness, non-repudiability, impossibility of anonymous
+re-authorisation, and finite-time evidence construction --- and a
+real-cryptography reference implementation. Empirical validation
+across $3{,}812$ halt events, $1{,}800$ adversarial attempts,
+$18$ cross-model runs, and $36$ temperature-sweep runs shows that the
+construction behaves as the theory predicts and that the model-specific
+drift threshold $\Tstar$ is stable, measurable, and architecture-driven
+rather than scale-driven, with the empirical caveat that
+temperature-insensitivity itself is conditional on a model sitting
+in a fast-drifting regime. The result is a small, configurable,
+provably-bounded mechanism by which a system that has reached the
+limit of its own authority can hand the resolution back to a
+named, accountable human --- without trusting the system itself
+to make that handover honestly.
+
+% =============================================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

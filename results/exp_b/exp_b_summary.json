@@ -1,0 +1,64 @@
+{
+  "experiment": "p8_exp_b_apb_integrity",
+  "timestamp": "2026-05-08T01:11:16.946421+00:00",
+  "n_apbs": 200,
+  "max_age_seconds": 300.0,
+  "baseline_verification": {
+    "valid": 200,
+    "invalid": 0
+  },
+  "attacks": {
+    "A1_tamper_E_s": {
+      "per_field": {
+        "A_0_hash": {
+          "detected": 200,
+          "missed": 0
+        },
+        "D_hat": {
+          "detected": 200,
+          "missed": 0
+        },
+        "t_e": {
+          "detected": 200,
+          "missed": 0
+        },
+        "trace_hash": {
+          "detected": 200,
+          "missed": 0
+        },
+        "cause": {
+          "detected": 200,
+          "missed": 0
+        }
+      },
+      "total": {
+        "detected": 1000,
+        "missed": 0
+      }
+    },
+    "A2a_forge_random_bytes": {
+      "detected": 200,
+      "missed": 0
+    },
+    "A2b_forge_attacker_key": {
+      "detected": 200,
+      "missed": 0
+    },
+    "A3_identity_swap": {
+      "detected": 200,
+      "missed": 0
+    },
+    "A4_replay": {
+      "detected": 200,
+      "missed": 0
+    }
+  },
+  "totals": {
+    "attacks": 1800,
+    "detected": 1800,
+    "missed": 0,
+    "detection_rate_pct": 100.0
+  },
+  "T8_2_assertion": "PASSED",
+  "T8_3_assertion": "PASSED"
+}

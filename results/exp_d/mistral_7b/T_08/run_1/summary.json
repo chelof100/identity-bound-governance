@@ -1,0 +1,14 @@
+{
+  "model": "mistral:7b",
+  "temperature": 0.8,
+  "run": 1,
+  "drift_steps": 500,
+  "burn_in": 50,
+  "theta": 0.2,
+  "T_star": 150,
+  "D_final": 0.4366,
+  "enforcement_total": 0,
+  "elapsed_sec": 84.6,
+  "llm_calls": 550,
+  "timestamp": "2026-05-08T15:44:04.602914+00:00"
+}

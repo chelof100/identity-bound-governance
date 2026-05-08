@@ -1,0 +1,26 @@
+{
+  "default": {
+    "halt_events": 3812,
+    "recovery_resume": 2012,
+    "apb_signed": 1800,
+    "apb_invalid": 0,
+    "neither": 0,
+    "apb_decisions": {
+      "RESUME": 1800,
+      "DENY": 0,
+      "RECALIBRATE": 0
+    }
+  },
+  "low_thresh": {
+    "halt_events": 3812,
+    "recovery_resume": 2012,
+    "apb_signed": 1800,
+    "apb_invalid": 0,
+    "neither": 0,
+    "apb_decisions": {
+      "RESUME": 1037,
+      "DENY": 727,
+      "RECALIBRATE": 36
+    }
+  }
+}

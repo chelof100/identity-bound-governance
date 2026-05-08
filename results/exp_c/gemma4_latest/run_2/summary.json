@@ -1,0 +1,15 @@
+{
+  "model": "gemma4:latest",
+  "run": 2,
+  "drift_steps": 500,
+  "burn_in": 50,
+  "temperature": 0.4,
+  "theta": 0.2,
+  "T_star": 271,
+  "D_final": 0.2796,
+  "D_max": 0.2796,
+  "enforcement_total": 0,
+  "elapsed_sec": 509.4,
+  "llm_calls": 550,
+  "timestamp": "2026-05-08T12:46:21.001132+00:00"
+}

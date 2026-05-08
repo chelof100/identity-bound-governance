@@ -1,0 +1,15 @@
+{
+  "model": "deepseek-r1:8b",
+  "run": 3,
+  "drift_steps": 500,
+  "burn_in": 50,
+  "temperature": 0.4,
+  "theta": 0.2,
+  "T_star": 159,
+  "D_final": 0.4246,
+  "D_max": 0.4246,
+  "enforcement_total": 0,
+  "elapsed_sec": 124.5,
+  "llm_calls": 550,
+  "timestamp": "2026-05-08T12:29:07.446796+00:00"
+}
