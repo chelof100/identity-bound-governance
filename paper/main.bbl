@@ -1,0 +1,84 @@
+\begin{thebibliography}{12}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Authority(2024)]{cryptographylib}
+Python~Cryptographic Authority.
+\newblock {cryptography}: Python cryptographic recipes and primitives.
+\newblock \url{https://github.com/pyca/cryptography}, 2024.
+\newblock Version 42+.
+
+\bibitem[Bai et~al.(2022)]{bai2022constitutional}
+Yuntao Bai et~al.
+\newblock Constitutional {AI}: Harmlessness from {AI} feedback.
+\newblock \emph{arXiv preprint arXiv:2212.08073}, 2022.
+
+\bibitem[Bernstein et~al.(2012)Bernstein, Duif, Lange, Schwabe, and
+  Yang]{bernstein2012highspeed}
+Daniel~J. Bernstein, Niels Duif, Tanja Lange, Peter Schwabe, and Bo-Yin Yang.
+\newblock High-speed high-security signatures.
+\newblock \emph{Journal of Cryptographic Engineering}, 2\penalty0 (2):\penalty0
+  77--89, 2012.
+\newblock ed25519 specification.
+
+\bibitem[Boneh and Shoup(2014)]{boneh2014foundations}
+Dan Boneh and Victor Shoup.
+\newblock \emph{A Graduate Course in Applied Cryptography}.
+\newblock Self-published, 2014.
+\newblock URL \url{https://crypto.stanford.edu/~dabo/cryptobook/}.
+
+\bibitem[Boneh et~al.(2018)Boneh, Drijvers, and Neven]{boneh2018compact}
+Dan Boneh, Manu Drijvers, and Gregory Neven.
+\newblock Compact multi-signatures for smaller blockchains.
+\newblock In \emph{ASIACRYPT 2018}, pages 435--464, 2018.
+
+\bibitem[Bray(2017)]{rfc8259}
+Tim Bray.
+\newblock The {JavaScript} {Object} {Notation} ({JSON}) data interchange
+  format.
+\newblock RFC 8259, 2017.
+
+\bibitem[Fernandez(2026)]{fernandez2026applied}
+Marcelo Fernandez.
+\newblock Closing the execution gap in {LLM} agent systems: Empirical evidence
+  for compliant drift, partial observability, and integrated runtime
+  governance.
+\newblock arXiv:TBD, 2026.
+\newblock Paper~7 of the Agent Governance Series.
+  \url{https://doi.org/10.5281/zenodo.19929771}.
+
+\bibitem[Gennaro and Goldfeder(2018)]{gennaro2018fast}
+Rosario Gennaro and Steven Goldfeder.
+\newblock Fast multiparty threshold {ECDSA} with fast trustless setup.
+\newblock In \emph{ACM CCS 2018}, pages 1179--1194, 2018.
+
+\bibitem[Laurie et~al.(2013)Laurie, Langley, and
+  K{\"a}sper]{transparencylog2014}
+Ben Laurie, Adam Langley, and Emilia K{\"a}sper.
+\newblock Certificate transparency.
+\newblock RFC 6962, 2013.
+
+\bibitem[Mitchell et~al.(2019)Mitchell, Wu, Zaldivar, Barnes, Vasserman,
+  Hutchinson, Spitzer, Raji, and Gebru]{mitchell2019model}
+Margaret Mitchell, Simone Wu, Andrew Zaldivar, Parker Barnes, Lucy Vasserman,
+  Ben Hutchinson, Elena Spitzer, Inioluwa~Deborah Raji, and Timnit Gebru.
+\newblock Model cards for model reporting.
+\newblock In \emph{Proceedings of the Conference on Fairness, Accountability,
+  and Transparency (FAT*)}, pages 220--229, 2019.
+
+\bibitem[{OpenAI}(2024)]{openai2024systemcard}
+{OpenAI}.
+\newblock {GPT-4} system card.
+\newblock \url{https://openai.com/index/gpt-4-system-card/}, 2024.
+\newblock Accessed 2026-05-08.
+
+\bibitem[Wood(2014)]{wood2014ethereum}
+Gavin Wood.
+\newblock Ethereum: A secure decentralised generalised transaction ledger.
+\newblock Ethereum Yellow Paper, 2014.
+\newblock EIP-150 Revision.
+
+\end{thebibliography}
