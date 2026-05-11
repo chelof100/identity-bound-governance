@@ -604,6 +604,12 @@ The recovery loop's exit set $\{\RESUME, \HALT, \DENY\}$ partitions
 the post-halt state space into transient ($\RESUME$) and
 persistent ($\HALT \cup \DENY$). The latter is exactly the
 domain of $G$.
+Note that $\HALT$ and $\DENY$ are semantically distinct:
+$\HALT$ denotes an unresolved system state (the loop exhausted its
+authority without a decision), while $\DENY$ denotes a resolved human
+decision to refuse resumption. Both share the property that the
+execution layer cannot self-resolve them without external authority,
+which is the criterion relevant here.
 \end{lemma}
 
 \begin{proof}
@@ -654,12 +660,14 @@ six $\Es$ fields produce distinct byte-strings.
 $\mathrm{canon}$ is the RFC~8785 JSON Canonicalization Scheme
 \citep{rfc8785}: keys sorted by Unicode codepoint, IEEE~754
 representation for numbers, UTF-8 encoding, no insignificant whitespace.
-RFC~8785 is strictly injective on objects whose values are primitives
-(strings and numbers), as distinct field values produce distinct
-byte-level representations and the key-sort order is deterministic.
-Each $\Es$ field is a primitive (string or float), so the encoding is
-injective. The $\mathrm{eid}$ field is a UUID4 string, which is a
-primitive and thus covered by the same argument.
+The RFC~8785 canonical mapping is injective over the primitive
+dataclass domain used here: all $\Es$ and $\Dh$ fields are strings
+or IEEE~754 floats, and for this domain distinct field values produce
+distinct byte-level representations (the key-sort order is
+deterministic and no two distinct primitive values share a
+canonical encoding under RFC~8785).
+The $\mathrm{eid}$ field is a UUID4 string, which is a primitive and
+thus covered by the same argument.
 \end{proof}
 
 \begin{lemma}[Signature Verifiability Under Tamper]
@@ -953,7 +961,10 @@ coverage $0.70$, $\theta = 0.20$, and a single principal
 $H_{\mathrm{alice}}$ in $\Pset$. Whenever the recovery loop returns
 $\HALT$ or $\DENY$ on a halt, the governance layer is invoked with a
 threshold-based decision policy; the resulting APB is verified
-through the verifier (V1--V4) before being recorded.
+through the full verifier (V1--V5) before being recorded.
+V5 is vacuously satisfied in this experiment: each governance event
+generates a fresh UUID4 \texttt{event\_id}, so the nonce store
+never contains a duplicate.
 
 \paragraph{Policy sensitivity.} We run the same stack under two
 threshold policies. The \emph{default} policy uses
