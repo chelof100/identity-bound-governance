@@ -35,12 +35,6 @@ Dan Boneh, Manu Drijvers, and Gregory Neven.
 \newblock Compact multi-signatures for smaller blockchains.
 \newblock In \emph{ASIACRYPT 2018}, pages 435--464, 2018.
 
-\bibitem[Bray(2017)]{rfc8259}
-Tim Bray.
-\newblock The {JavaScript} {Object} {Notation} ({JSON}) data interchange
-  format.
-\newblock RFC 8259, 2017.
-
 \bibitem[Fernandez(2026)]{fernandez2026applied}
 Marcelo Fernandez.
 \newblock Closing the execution gap in {LLM} agent systems: Empirical evidence
@@ -74,6 +68,13 @@ Margaret Mitchell, Simone Wu, Andrew Zaldivar, Parker Barnes, Lucy Vasserman,
 \newblock {GPT-4} system card.
 \newblock \url{https://openai.com/index/gpt-4-system-card/}, 2024.
 \newblock Accessed 2026-05-08.
+
+\bibitem[Rundgren et~al.(2020)Rundgren, Jordan, and Erdtman]{rfc8785}
+Anders Rundgren, Bret Jordan, and Samuel Erdtman.
+\newblock {JSON} canonicalization scheme ({JCS}).
+\newblock RFC 8785, 2020.
+\newblock URL \url{https://www.rfc-editor.org/rfc/rfc8785}.
+\newblock IETF Informational RFC.
 
 \bibitem[Wood(2014)]{wood2014ethereum}
 Gavin Wood.

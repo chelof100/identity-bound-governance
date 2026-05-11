@@ -183,6 +183,59 @@ def test_apb_within_window_accepted(alice, registry):
 
 
 # ---------------------------------------------------------------------------
+# Attack vector 5: duplicate event_id (V5 — semantic uniqueness)
+# ---------------------------------------------------------------------------
+
+def test_duplicate_event_id_rejected(alice, registry):
+    """Replaying the same APB within the acceptance window is rejected by V5."""
+    apb = APB.construct(_mk_E_s(), _mk_D_h(alice["H_id"]), alice["sk"])
+    seen: set = set()
+    # First submission: accepted
+    r1 = verify_apb(apb, registry, max_age_seconds=600.0, seen_event_ids=seen)
+    assert r1.is_valid
+    assert apb.E_s.event_id in seen
+    # Exact replay within the same window: rejected
+    r2 = verify_apb(apb, registry, max_age_seconds=600.0, seen_event_ids=seen)
+    assert r2.result is VerificationResult.DUPLICATE_EVENT_ID
+
+
+def test_distinct_event_ids_both_accepted(alice, registry):
+    """Two different APBs with distinct event_ids are both accepted."""
+    apb1 = APB.construct(_mk_E_s(), _mk_D_h(alice["H_id"]), alice["sk"])
+    apb2 = APB.construct(_mk_E_s(), _mk_D_h(alice["H_id"]), alice["sk"])
+    # UUID4 ensures different event_ids
+    assert apb1.E_s.event_id != apb2.E_s.event_id
+    seen: set = set()
+    assert verify_apb(apb1, registry, max_age_seconds=600.0, seen_event_ids=seen).is_valid
+    assert verify_apb(apb2, registry, max_age_seconds=600.0, seen_event_ids=seen).is_valid
+
+
+def test_v5_skipped_when_no_seen_set(alice, registry):
+    """If seen_event_ids is None, V5 is not enforced (single-APB validation)."""
+    apb = APB.construct(_mk_E_s(), _mk_D_h(alice["H_id"]), alice["sk"])
+    r1 = verify_apb(apb, registry, max_age_seconds=600.0)
+    r2 = verify_apb(apb, registry, max_age_seconds=600.0)
+    assert r1.is_valid
+    assert r2.is_valid  # no seen set → no V5 → both pass
+
+
+def test_tampered_event_id_breaks_signature(alice, registry):
+    """Modifying event_id after signing invalidates sigma_h (E_s is signed)."""
+    apb = APB.construct(_mk_E_s(), _mk_D_h(alice["H_id"]), alice["sk"])
+    # Build an APB with a different event_id but the same signature
+    tampered_E_s_dict = apb.E_s.to_dict()
+    tampered_E_s_dict["event_id"] = "00000000-0000-4000-a000-000000000099"
+    from stack.apb import SystemEvidenceBlock
+    tampered = APB(
+        E_s=SystemEvidenceBlock.from_dict(tampered_E_s_dict),
+        D_h=apb.D_h,
+        sigma_h=apb.sigma_h,
+    )
+    report = verify_apb(tampered, registry)
+    assert report.result is VerificationResult.INVALID_SIGNATURE
+
+
+# ---------------------------------------------------------------------------
 # Principal lifecycle
 # ---------------------------------------------------------------------------
 

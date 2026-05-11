@@ -94,12 +94,16 @@ construct $\Es$ but cannot forge $\sigh$ (it lacks the principal's secret
 key); the principal can issue $\Dh$ but cannot alter $\Es$ undetected (the
 signature covers both).
 We prove four theorems about this construction:
-\emph{Governance Completeness} (every halt resolves through either the
-recovery loop or a signed APB), \emph{Non-Repudiability} (no principal can
+\emph{Protocol-Bounded Governance Completeness} (every halt resolves through
+either the recovery loop or a signed APB, within the execution model
+induced by DC.1/DC.2), \emph{Non-Repudiability} (no principal can
 deny a governance act for which a valid APB exists),
 \emph{Impossibility of Anonymous Re-Authorization} (the execution layer
 cannot generate a valid APB without the principal's private credential),
 and \emph{Finite-Time APB Construction Termination}.
+The implementation uses the RFC~8785 JSON Canonicalization Scheme (JCS)
+for cross-implementation-safe signatures and extends replay defence
+with a UUID4-based semantic-uniqueness predicate (V5).
 
 We provide a real-cryptography implementation in
 \texttt{cryptography/ed25519}, expose the result through an Authority
@@ -135,15 +139,21 @@ guards and policy engines do not answer: \emph{when an agent's runtime
 governance system declares that it can no longer act safely, who is
 empowered to lift that halt, and what record must they leave behind?}
 
-We refer to this question as the problem of \emph{identity-bound
-governance under execution uncertainty}. It is the structural complement
-to the empirical observation, established in prior work in this series
-\citep{fernandez2026applied}, that runtime drift and partial observability
-generate halts that the recovery loop cannot itself resolve. Once such a
-halt is persistent in the formal sense (\S\ref{sec:framework}), the system
-is by design unable to issue a unilateral resumption: doing so would
-constitute a recalibration of its own authority, which the design
-constraints of \citep{fernandez2026applied} forbid.
+Prior work in this series~\citep{fernandez2026applied} establishes that
+persistent halts emerge structurally, not accidentally, even in fully
+governed agent stacks: runtime drift and partial observability generate
+halt events that the Recovery Loop exhausts its bounded authority trying
+to resolve. Once such a halt is persistent in the formal sense
+(\S\ref{sec:framework}), the system cannot issue a unilateral resumption
+--- doing so would constitute a recalibration of its own authority, which
+the design constraints DC.1 and DC.2 of~\citep{fernandez2026applied}
+explicitly forbid. \emph{P7 establishes the empirical necessity; P8
+answers the structural question that necessity leaves open}: who may
+re-authorize execution, under what evidence, and with what non-repudiable
+record?
+
+We refer to this as the problem of \emph{identity-bound governance under
+execution uncertainty}.
 
 The standard accountability mechanisms in deployed AI systems are not a
 solution to this problem. Documentation artefacts such as model cards
@@ -171,16 +181,17 @@ Specifically:
         five attacker classes, with the boundary between what the APB
         defends against and what it does not made precise.
   \item We prove four theorems (\S\ref{sec:theorems}):
-        \emph{Governance Completeness} (T8.1),
+        \emph{Protocol-Bounded Governance Completeness} (T8.1),
         \emph{Non-Repudiability} (T8.2),
         \emph{Impossibility of Anonymous Re-Authorization} (T8.3),
         and \emph{Finite-Time APB Construction Termination} (T8.4).
         Each is supported by auxiliary lemmas that decompose the
         argument.
   \item We provide a real-cryptography implementation
-        (\S\ref{sec:impl}) using $\text{ed25519}$ signatures over a
-        canonical JSON encoding, with a Principal Registry, a
-        verifier that distinguishes failure modes, and an
+        (\S\ref{sec:impl}) using $\text{ed25519}$ signatures over the
+        RFC~8785 JSON Canonicalization Scheme (JCS), with a Principal
+        Registry, a five-predicate verifier (V1--V5, including a
+        semantic-uniqueness check via UUID4 event identifiers), and an
         append-only log with HMAC chaining for persistence.
   \item We validate the construction empirically through four
         experiments (\S\ref{sec:exp_a}--\S\ref{sec:exp_d}):
@@ -398,6 +409,7 @@ triple
 where
 \begin{align*}
   \Es &= (\mathrm{hash}(\Azero),\; \Dhat(t_e),\; t_e,\;
+         \mathrm{eid},\;
          \mathrm{hash}(\mathrm{trace}_{\le t_e}),\; \mathrm{cause})
          \quad\text{(System Evidence Block)}\\
   \Dh &= (\Hi,\;\mathrm{decision},\;\mathrm{rationale},\;\mathrm{scope})
@@ -407,8 +419,16 @@ where
             \,\bigr)
          \quad\text{(Signature)}
 \end{align*}
-$\mathrm{canon}(\cdot)$ denotes a canonical (sort-keyed, fixed-encoding)
-serialisation; $\mathrm{Sign}$ is the ed25519 signature operation.
+$\mathrm{eid}$ is a UUID version~4 generated once at evidence-construction
+time; it provides semantic uniqueness across governance events independently
+of $t_e$ (enabling V5, \S\ref{sec:impl}).
+$\mathrm{canon}(\cdot)$ denotes the RFC~8785 JSON Canonicalization Scheme
+(JCS)~\citep{rfc8785}: keys sorted by Unicode codepoint, IEEE~754
+number representation, no insignificant whitespace, UTF-8 encoding.
+This cross-implementation-safe encoding is the deterministic
+input to the signature, removing any ambiguity that could otherwise
+weaken the non-repudiability and tamper-detection guarantees.
+$\mathrm{Sign}$ is the ed25519 signature operation.
 \end{definition}
 
 The construction has three structural properties enforced by its
@@ -438,8 +458,11 @@ considered.
         $\Hi \in \Pset$. Goal: synthesise a $\sigh$ that verifies
         against some registered $\pki$. Defence: T8.3.
   \item[A3. Replay attacker.] Holds a previously-valid APB and tries
-        to use it in a new context. Defence: $t_e \in \Es$ plus the
-        verifier's age check (\S\ref{sec:impl}).
+        to use it in a new context. Defence: two complementary predicates
+        in the verifier (\S\ref{sec:impl}): V4 (temporal freshness, rejects
+        APBs outside the acceptable age window) and V5 (semantic
+        uniqueness, rejects any APB whose $\mathrm{eid}$ was already
+        accepted, even within the V4 window).
   \item[A4. Man-in-the-middle.] Intercepts an APB in transit and tries
         to modify either $\Es$ or $\Dh$ before delivery. Defence:
         $\sigh$ covers both blocks, so any tampering invalidates
@@ -480,20 +503,22 @@ proofs. The fourth (T8.4) is new: it establishes that the construction
 of $\Es$ terminates in bounded time, which is required for T8.1 to be
 non-vacuous.
 
-\subsection{T8.1 --- Governance Completeness}
+\subsection{T8.1 --- Protocol-Bounded Governance Completeness}
 \label{sec:t81}
 
-\begin{theorem}[Governance Completeness]
+\begin{theorem}[Protocol-Bounded Governance Completeness]
 \label{thm:completeness}
 Let $h$ be a $\HALT$ event emitted by an execution layer satisfying
-DC.1 and DC.2. Then exactly one of the following resolutions holds:
+DC.1 and DC.2. Then, within the execution model induced by DC.1, DC.2,
+and the APB verifier predicates, exactly one of the following
+resolutions holds:
 \begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=1pt]
   \item[(R1)] $h$ is transient under DC.2 and the recovery loop
         produces a $\RESUME$ within its bounded attempt budget;
   \item[(R2)] $h$ is persistent under DC.2 and a valid signed
         $\APB$ is produced through an evaluation of $G$.
 \end{enumerate}
-No third resolution path exists.
+No third resolution path exists within the protocol boundary.
 \end{theorem}
 
 \begin{proof}
@@ -514,7 +539,16 @@ Definition~\ref{def:apb}, given $\Es$ and a principal $\Hi$ with valid
 $\ski$, an APB is produced. We are in case (R2).
 The two cases are exhaustive (DC.2) and disjoint (the recovery loop's
 output of $\RESUME$ excludes persistence within the same window).
-Therefore no third resolution exists.
+Therefore no third resolution exists within the protocol boundary.
+
+\emph{Scope of the claim.}
+This completeness result is relative to the execution model induced by
+DC.1, DC.2, and the APB verifier predicates V1--V5. It does not assert
+completeness under arbitrary infrastructure failures, compromised
+principal sets, or events external to the protocol boundary
+(e.g.\ a fully inoperative registry or unreachable signing device).
+Those failure modes are addressed by the composability layer discussed
+in \S\ref{sec:composability}.
 \end{proof}
 
 \begin{lemma}[Resolution Path Exhaustivity]
@@ -566,15 +600,19 @@ negligible probability in the security parameter.
 \label{lem:integrity}
 The canonical encoding $\mathrm{canon}$ used in the APB construction
 is collision-resistant on dataclass content: distinct values of the
-five $\Es$ fields produce distinct byte-strings.
+six $\Es$ fields produce distinct byte-strings.
 \end{lemma}
 
 \begin{proof}
-$\mathrm{canon}$ is JSON with sorted keys, fixed-encoding numeric
-representation, and UTF-8 string encoding. JSON with sorted keys is
-injective on dataclass content with primitive-type fields
-\citep{rfc8259}. Each $\Es$ field is a primitive (string or float),
-so the encoding is injective.
+$\mathrm{canon}$ is the RFC~8785 JSON Canonicalization Scheme
+\citep{rfc8785}: keys sorted by Unicode codepoint, IEEE~754
+representation for numbers, UTF-8 encoding, no insignificant whitespace.
+RFC~8785 is strictly injective on objects whose values are primitives
+(strings and numbers), as distinct field values produce distinct
+byte-level representations and the key-sort order is deterministic.
+Each $\Es$ field is a primitive (string or float), so the encoding is
+injective. The $\mathrm{eid}$ field is a UUID4 string, which is a
+primitive and thus covered by the same argument.
 \end{proof}
 
 \begin{lemma}[Signature Verifiability Under Tamper]
@@ -655,8 +693,8 @@ $O(|\Azero| + |\mathrm{trace}_{\le t_e}|)$.
 \end{theorem}
 
 \begin{proof}
-By Definition~\ref{def:apb}, $\Es$ has five fields:
-$\mathrm{hash}(\Azero)$, $\Dhat(t_e)$, $t_e$,
+By Definition~\ref{def:apb}, $\Es$ has six fields:
+$\mathrm{hash}(\Azero)$, $\Dhat(t_e)$, $t_e$, $\mathrm{eid}$,
 $\mathrm{hash}(\mathrm{trace}_{\le t_e})$, and $\mathrm{cause}$.
 Lemma~\ref{lem:bounded_count} establishes that the field count is
 fixed; Lemma~\ref{lem:bounded_capture} establishes that each field's
@@ -665,7 +703,7 @@ capture time is bounded. Their conjunction gives the stated bound.
 
 \begin{lemma}[Bounded $\Es$ Field Count]
 \label{lem:bounded_count}
-The number of fields in $\Es$ is fixed at five and does not depend
+The number of fields in $\Es$ is fixed at six and does not depend
 on runtime state.
 \end{lemma}
 
@@ -675,11 +713,13 @@ By Definition~\ref{def:apb}, fixed at compile time.
 
 \begin{lemma}[Bounded Capture Time Per Field]
 \label{lem:bounded_capture}
-Each of the five $\Es$ fields can be computed in time bounded
+Each of the six $\Es$ fields can be computed in time bounded
 linearly in the size of its underlying input:
 $\mathrm{hash}(\Azero)$ in $O(|\Azero|)$;
 $\Dhat(t_e)$ in $O(1)$ (already computed by the IML monitor);
 $t_e$ in $O(1)$;
+$\mathrm{eid}$ in $O(1)$ (UUID4 generation is a constant-time
+operation over a fixed-length random bitstring);
 $\mathrm{hash}(\mathrm{trace}_{\le t_e})$ in $O(|\mathrm{trace}_{\le t_e}|)$;
 $\mathrm{cause}$ in $O(1)$ (a fixed-vocabulary string).
 \end{lemma}
@@ -704,9 +744,12 @@ We use ed25519 from the \texttt{cryptography} library
 \citep{cryptographylib}, version $\geq 42$. Each $\Hi \in \Pset$ has a
 $32$-byte private key (held only by $\Hi$) and a $32$-byte public key
 held in the registry. Signatures are $64$ bytes. Canonical
-serialisation uses Python's \texttt{json.dumps} with
-\texttt{sort\_keys=True} and the compact separators
-\texttt{(",", ":")}.
+serialisation is the RFC~8785 JSON Canonicalization Scheme (JCS),
+implemented via the \texttt{jcs} library~\citep{rfc8785}: keys sorted
+by Unicode codepoint, IEEE~754 number representation, no insignificant
+whitespace, UTF-8 encoding. This replaces ad-hoc
+\texttt{sort\_keys=True} JSON and eliminates any cross-implementation
+ambiguity in the signed message.
 
 \paragraph{Modules.}
 Four new modules implement the framework
@@ -733,7 +776,7 @@ Total                              & 670 & Plus 61 unit tests over the four modu
 \end{table}
 
 \paragraph{Verifier predicates.}
-The verifier evaluates four predicates against an APB and a
+The verifier evaluates five predicates against an APB and a
 registry, and returns the first failing predicate (or VALID):
 \begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=1pt]
   \item[V1.] The signed message verifies against $\pki$ for the
@@ -741,12 +784,22 @@ registry, and returns the first failing predicate (or VALID):
   \item[V2.] $\Hi$ is in the registry.
   \item[V3.] $\Hi$ was active at $t_e$ (not revoked before signing).
   \item[V4.] $t_e$ lies within an acceptable window relative to the
-        verification time (replay defence).
+        verification time (temporal freshness / clock-based replay defence).
+  \item[V5.] $\mathrm{eid}$ has not been accepted in the current
+        verification session (semantic uniqueness / duplicate-submission
+        defence). The verifier maintains a caller-supplied nonce store;
+        the first accepted APB with a given $\mathrm{eid}$ adds it to
+        the store, and any subsequent submission of the same
+        $\mathrm{eid}$ is rejected regardless of $t_e$.
 \end{enumerate}
+V4 and V5 are complementary: V4 rejects temporally stale or future
+APBs; V5 rejects exact replays within the acceptance window.
+Together they provide both temporal freshness and semantic uniqueness.
 The enumerated failure modes (\texttt{INVALID\_SIGNATURE},
 \texttt{PRINCIPAL\_NOT\_FOUND}, \texttt{PRINCIPAL\_REVOKED},
-\texttt{REPLAY}, \texttt{MALFORMED}) allow Experiment~B
-(\S\ref{sec:exp_b}) to count detection rates per attack class.
+\texttt{REPLAY}, \texttt{DUPLICATE\_EVENT\_ID}, \texttt{MALFORMED})
+allow Experiment~B (\S\ref{sec:exp_b}) to count detection rates per
+attack class.
 
 \paragraph{Persistence.}
 APBs are persisted in append-only JSONL files with HMAC chaining:
@@ -1059,11 +1112,61 @@ will record it. The mitigations are configurable around the APB,
 not within it: $k$-of-$n$ multi-signature for sensitive decisions,
 key rotation under $\RECAL$ governance events, and out-of-band
 review of recorded APBs against expected decision patterns.
-The proofs of T8.1--T8.4 rest on the security assumptions of
-ed25519 over curve25519. A break of those assumptions would
-invalidate the cryptographic guarantees but not the structural
-claims (T8.1 in particular is a partition argument that does not
-depend on the signature scheme).
+The proofs of T8.2--T8.4 rest on the security assumptions of
+ed25519 over curve25519 and on the RFC~8785 canonicalization
+properties. A break of those assumptions would invalidate the
+cryptographic guarantees but not the structural claims (T8.1 in
+particular is a partition argument that does not depend on the
+signature scheme).
+It is worth noting explicitly that T8.2 and T8.3 are reductions to
+known cryptographic properties --- the existential unforgeability of
+ed25519 under chosen-message attack (EUF-CMA) and the injectivity
+of RFC~8785 canonicalization --- rather than novel mathematical
+results. Their value lies in showing that these well-established
+properties compose cleanly with the APB structure to produce the
+non-repudiability and anonymous-re-authorization impossibility
+guarantees needed by the governance layer.
+
+\paragraph{Composability with access control.}
+\label{sec:composability}
+The APB protocol is deliberately orthogonal to access control: it
+records \emph{that} a named principal made a decision, not
+\emph{whether} that principal was entitled to do so. This separation
+is a feature, not a limitation --- it allows the APB to be composed
+with any access-control layer without redesigning either.
+
+Three composable extensions are worth noting for deployments that
+require stronger guarantees:
+
+\begin{description}[leftmargin=2em, topsep=2pt, itemsep=3pt]
+  \item[$k$-of-$n$ threshold signing.] For decisions of high
+  consequence (e.g.\ $\RECAL$ events), operators can require
+  that $k$ distinct members of $\Pset$ each produce a valid
+  $\sigh$ over the same $(\Es, \Dh)$ before the governance
+  layer accepts the APB. Under $k$-of-$n$, governance capture
+  requires the simultaneous compromise of at least $k$
+  principals; with $k = \lceil n/2 \rceil + 1$ this becomes a
+  majority quorum with Byzantine tolerance.
+
+  \item[Role-based authority scoping.] The $\mathrm{scope}$ field
+  of $\Dh$ is a free-form string in the current implementation;
+  a deployment MAY define a structured vocabulary and enforce
+  that principals with a given RBAC role can only sign APBs
+  with scopes from their allowed set. The verifier's V2/V3
+  predicates can be extended to check role membership without
+  changing the cryptographic core.
+
+  \item[Capability tokens and policy engines.] For deployments
+  already running a policy engine (OPA, Cedar, or similar),
+  the APB's $\mathrm{eid}$ can serve as an immutable token
+  whose issuance is gated by the policy layer. The APB then
+  becomes the non-repudiable audit record of a token-issuance
+  event rather than a standalone access decision.
+\end{description}
+
+These extensions are deferred to subsequent work (P9 onwards in
+this series); the present paper establishes the primitive on which
+they compose.
 
 \paragraph{Integration paths.}
 Two integration directions are natural extensions and deferred to
@@ -1071,20 +1174,32 @@ subsequent work. \emph{MCP/A2A integration}: the governance stack of
 \citep{fernandez2026applied} operates on tool-call traces from a
 LangGraph state graph; the Model Context Protocol and Agent-to-Agent
 communication standards define interception points at which the
-APB-emitting layer could be applied transparently to agent code.
+APB-emitting layer could be applied transparently to agent code
+--- this is the focus of the next paper in this series.
 \emph{Distributed APB log}: replacing the JSONL+HMAC chain with a
 Merkle tree (and, for cross-organisational deployments, anchoring
 to a public transparency log) gives stronger tamper evidence under
 multi-writer scenarios.
 
+\paragraph{Exploratory nature of Experiment D.}
+The temperature-sweep results of \S\ref{sec:exp_d} should be read
+as \emph{exploratory observations}, not as statistically validated
+claims. With three runs per temperature-model cell, the results
+are insufficient to estimate within-cell variance reliably; they
+motivate hypotheses about the drift-floor effect and the
+temperature-$\Tstar$ interaction, but a confirmatory study would
+require at least $N \geq 10$ runs per cell with power analysis.
+We move these results to the ``Observations'' register rather
+than the ``Validation'' register of the paper's contribution.
+
 \paragraph{Choice of decision-policy thresholds.}
-Experiment~A's policy comparison shows that Governance Completeness
-is invariant under threshold choice. We do not, in this paper,
-prescribe a particular $(\theta_d, \theta_r)$. Their setting is a
-deployment decision tied to the operator's tolerance for halts that
-escalate to $\DENY$ versus $\RESUME$, and to the empirical
-distribution of $\Dhat$ at the moments of governance event in the
-operator's workload.
+Experiment~A's policy comparison shows that Protocol-Bounded
+Governance Completeness is invariant under threshold choice. We
+do not, in this paper, prescribe a particular $(\theta_d, \theta_r)$.
+Their setting is a deployment decision tied to the operator's
+tolerance for halts that escalate to $\DENY$ versus $\RESUME$, and
+to the empirical distribution of $\Dhat$ at the moments of
+governance event in the operator's workload.
 
 % =============================================================================
 \section{Conclusion}
@@ -1093,21 +1208,27 @@ operator's workload.
 We have introduced the Accountability Proof Block as the formal
 mechanism by which an LLM agent's persistent halts resolve into
 identity-bound, cryptographically verifiable governance decisions.
-The construction is supported by four theorems --- governance
-completeness, non-repudiability, impossibility of anonymous
-re-authorisation, and finite-time evidence construction --- and a
-real-cryptography reference implementation. Empirical validation
+The construction is supported by four theorems ---
+protocol-bounded governance completeness, non-repudiability,
+impossibility of anonymous re-authorisation, and finite-time
+evidence construction --- and a real-cryptography reference
+implementation using the RFC~8785 JSON Canonicalization Scheme
+and a five-predicate verifier that provides both temporal freshness
+and semantic uniqueness guarantees. Empirical validation
 across $3{,}812$ halt events, $1{,}800$ adversarial attempts,
 $18$ cross-model runs, and $36$ temperature-sweep runs shows that the
 construction behaves as the theory predicts and that the model-specific
 drift threshold $\Tstar$ is stable, measurable, and architecture-driven
 rather than scale-driven, with the empirical caveat that
 temperature-insensitivity itself is conditional on a model sitting
-in a fast-drifting regime. The result is a small, configurable,
+in a fast-drifting regime (a result we flag as exploratory pending
+larger-sample confirmation). The result is a small, configurable,
 provably-bounded mechanism by which a system that has reached the
 limit of its own authority can hand the resolution back to a
 named, accountable human --- without trusting the system itself
-to make that handover honestly.
+to make that handover honestly --- and that composes cleanly with
+threshold signing, RBAC, and policy engines for deployments that
+require stronger access-control guarantees.
 
 % =============================================================================
 \bibliographystyle{plainnat}

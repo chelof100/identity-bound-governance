@@ -19,13 +19,20 @@ from stack.apb import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+_FIXED_EVENT_ID = "00000000-0000-4000-a000-000000000001"
+
+
 def _mk_E_s() -> SystemEvidenceBlock:
+    """Fixed-event_id fixture for determinism tests.
+    Use construct_evidence() (or override event_id) when you need a fresh UUID.
+    """
     return SystemEvidenceBlock(
         A_0_hash="a" * 64,
         D_hat=0.345,
         t_e="2026-05-07T10:30:00+00:00",
         trace_hash="b" * 64,
         cause="persistent_drift",
+        event_id=_FIXED_EVENT_ID,
     )
 
 
@@ -49,11 +56,13 @@ def test_E_s_canonical_is_deterministic():
 
 
 def test_E_s_canonical_sorted_keys():
+    """RFC 8785 JCS sorts keys by Unicode codepoint (alphabetical for ASCII)."""
     e = _mk_E_s()
     raw = e.to_canonical_bytes().decode()
-    keys_in_order = [k for k in ["A_0_hash", "D_hat", "cause", "t_e", "trace_hash"]]
+    # All six E_s fields in expected sorted order
+    keys_in_order = ["A_0_hash", "D_hat", "cause", "event_id", "t_e", "trace_hash"]
     found = [raw.index(f'"{k}":') for k in keys_in_order]
-    assert found == sorted(found), "canonical JSON must have keys in sorted order"
+    assert found == sorted(found), "RFC 8785 canonical JSON must have keys in sorted order"
 
 
 def test_E_s_roundtrip_dict():
@@ -187,13 +196,42 @@ def test_construct_evidence_produces_E_s():
     assert e.cause == "persistent_drift"
     assert len(e.A_0_hash) == 64
     assert len(e.trace_hash) == 64
+    # event_id must be a valid UUID4
+    import uuid as uuid_mod
+    parsed = uuid_mod.UUID(e.event_id)
+    assert parsed.version == 4
 
 
-def test_construct_evidence_deterministic_given_inputs():
+def test_construct_evidence_unique_event_ids():
+    """Each call to construct_evidence produces a distinct event_id (UUID4)."""
     a0 = {"theta": 0.20}
     tr = {"events": [1, 2, 3]}
     e1 = construct_evidence(a0, 0.5, tr, "X", t_e="2026-01-01T00:00:00+00:00")
     e2 = construct_evidence(a0, 0.5, tr, "X", t_e="2026-01-01T00:00:00+00:00")
+    # Same inputs but different event_ids
+    assert e1.event_id != e2.event_id
+
+
+def test_construct_evidence_explicit_event_id():
+    """Callers can supply a fixed event_id (e.g. deterministic test fixtures)."""
+    a0 = {"theta": 0.20}
+    tr = {"events": [1, 2, 3]}
+    eid = "00000000-0000-4000-a000-000000000001"
+    e = construct_evidence(a0, 0.5, tr, "X",
+                           t_e="2026-01-01T00:00:00+00:00",
+                           event_id=eid)
+    assert e.event_id == eid
+
+
+def test_construct_evidence_deterministic_given_all_inputs():
+    """Fully deterministic when all inputs including event_id are fixed."""
+    a0 = {"theta": 0.20}
+    tr = {"events": [1, 2, 3]}
+    eid = "00000000-0000-4000-a000-000000000001"
+    e1 = construct_evidence(a0, 0.5, tr, "X",
+                            t_e="2026-01-01T00:00:00+00:00", event_id=eid)
+    e2 = construct_evidence(a0, 0.5, tr, "X",
+                            t_e="2026-01-01T00:00:00+00:00", event_id=eid)
     assert e1 == e2
 
 
