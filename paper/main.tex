@@ -855,13 +855,15 @@ Module & LOC & Responsibility \\
 \texttt{stack/apb\_verifier.py}    & 155 & 5-predicate verification (V1--V5); failure-mode enum; attribution. \\
 \texttt{stack/governance\_layer.py}& 190 & Authority Resolution Function $G$; built-in policies. \\
 \texttt{stack/multi\_principal.py} & 280 & $\APB^{(k)}$, $k$-of-$n$ verifier, threshold governance layer. \\
+\texttt{stack/apb\_log.py}         & 230 & HMAC-chained JSONL log; tamper-evident append; thread-safe writes. \\
 \midrule
-Total                              & 985 & Plus 85 unit tests over all modules. \\
+Total                              & 1215 & Plus 103 unit tests over all modules. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \paragraph{Verifier predicates.}
+\label{sec:impl_verifier}%
 The verifier evaluates five predicates against an APB and a
 registry, and returns the first failing predicate (or VALID):
 \begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=1pt]
@@ -888,6 +890,7 @@ allow Experiment~B (\S\ref{sec:exp_b}) to count detection rates per
 attack class.
 
 \paragraph{Persistence.}
+\label{sec:impl_log}%
 APBs are persisted in append-only JSONL files with HMAC chaining:
 each entry's HMAC is computed over the previous entry's HMAC
 concatenated with the current entry's canonical bytes. This gives
@@ -1243,6 +1246,190 @@ $k \leq j$ and fail at $k > j$. The verifier correctly
 distinguishes ``insufficient signatures'' (S4--S5) from ``invalid
 signature'' (S6), enabling an operator to diagnose whether a
 rejection is due to under-provisioning or an active attack.
+
+% =============================================================================
+\section{Experiment F: Infrastructure Fault Injection}
+\label{sec:exp_f}
+
+\paragraph{Goal.}
+Validate robustness of the APB verification protocol against five
+representative infrastructure fault classes that arise in realistic
+deployments: clock drift (F1), registry key mismatch (F2), concurrent
+writes (F3), log tampering (F4), and duplicate APB submission (F5).
+Each class targets a distinct predicate from the V1--V5 verification
+suite (\S\ref{sec:impl_verifier}) or the tamper-evident log
+(\S\ref{sec:impl_log}).
+
+\paragraph{Setup.}
+We use a 3-principal registry (Alice, Bob, Carol) with ed25519
+key pairs.  Each fault class runs $N = 1{,}000$ events except
+F4, which runs $R = 100$ repetitions per tamper strategy with
+$N = 10$ log entries each (500 tampering trials in total).
+The V4 acceptance window is $T^* = 300\,\mathrm{s}$.
+All experiments are fully deterministic given the PRNG seed;
+results are reproducible via \texttt{experiments/exp\_fault\_injection.py}.
+
+\subsection*{F1 — Clock Drift (V4 boundary precision)}
+
+We inject artificial clock offsets $\delta \in
+\{-600, -310, -301, -299, -150, -1, 0, +1, +150, +299, +301, +310, +600\}$
+seconds into the evidence timestamp $t_e$, holding the verifier
+clock fixed at \emph{now}.  The V4 predicate accepts iff
+$|\delta| \leq T^*$.
+
+\begin{table}[h]
+\centering
+\caption{F1 Clock-drift results. Acceptance is exactly $|\delta| \leq 300\,\mathrm{s}$;
+all 1\,000 events per offset behave uniformly.}
+\label{tab:exp_f1}
+\small
+\begin{tabular}{rllr}
+\toprule
+$\delta$ (s) & Expected & Accepted / 1\,000 & Correct \\
+\midrule
+$-600$ & REJECT & 0     & \checkmark \\
+$-310$ & REJECT & 0     & \checkmark \\
+$-301$ & REJECT & 0     & \checkmark \\
+$-299$ & ACCEPT & 1\,000 & \checkmark \\
+$-150$ & ACCEPT & 1\,000 & \checkmark \\
+$\phantom{+}0$   & ACCEPT & 1\,000 & \checkmark \\
+$+150$ & ACCEPT & 1\,000 & \checkmark \\
+$+299$ & ACCEPT & 1\,000 & \checkmark \\
+$+301$ & REJECT & 0     & \checkmark \\
+$+310$ & REJECT & 0     & \checkmark \\
+$+600$ & REJECT & 0     & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All 13 offset points are classified correctly (Table~\ref{tab:exp_f1}).
+The boundary is sharp at $\pm 1\,\mathrm{s}$ relative to $T^*$: offset
+$-299\,\mathrm{s}$ is accepted and $-301\,\mathrm{s}$ is rejected in
+$100\%$ of trials, confirming deterministic V4 enforcement.
+
+\subsection*{F2 — Registry Key Mismatch (V1 under key corruption)}
+
+We register Alice with a \emph{wrong} public key (a freshly generated
+key unrelated to her signing key) and submit $1{,}000$ legitimately
+signed APBs.  The verifier must detect the mismatch via V1 and return
+\texttt{INVALID\_SIGNATURE} rather than \texttt{VALID} or
+\texttt{PRINCIPAL\_NOT\_FOUND}.
+
+\smallskip
+\noindent\textbf{Result:} $0$ false acceptances; $1{,}000/1{,}000$
+events return \texttt{INVALID\_SIGNATURE} (false-acceptance rate $= 0\%$).
+This models supply-chain key substitution or registry database corruption:
+even if the attacker's substituted key is plausible, a signature produced
+under the true private key fails V1 unconditionally due to EUF-CMA
+security of ed25519 (\S\ref{sec:t82}).
+
+\subsection*{F3 — Concurrent Writes (V5 thread safety)}
+
+We spawn $16$ threads, each submitting $50$ APBs (with distinct
+\texttt{event\_id} UUIDs) to a shared \texttt{APBLog} and a shared
+\texttt{seen\_event\_ids} nonce store protected by a \texttt{threading.Lock}.
+Total: $800$ events.
+
+\smallskip
+\noindent\textbf{Result:} All $800$ events are accepted exactly once;
+$0$ duplicate acceptances; $0$ thread errors; log integrity check passes
+($800/800$ entries verified).  The locking discipline serialises
+V5 nonce-store updates, preventing time-of-check/time-of-use (TOCTOU)
+races that could allow a duplicate event\_id to be accepted by two
+threads concurrently.
+
+\subsection*{F4 — Log Tampering (HMAC chain integrity)}
+
+We apply five tamper strategies to the HMAC-chained JSONL log across
+$R = 100$ repetitions each (Table~\ref{tab:exp_f4}).
+
+\begin{table}[h]
+\centering
+\caption{F4 Log-tampering detection rates ($R = 100$ per strategy,
+$N = 10$ entries per log, $500$ total tamper trials).
+All five strategies are detected in $100\%$ of trials.}
+\label{tab:exp_f4}
+\small
+\begin{tabular}{llr}
+\toprule
+Strategy & Description & Detection rate \\
+\midrule
+Field modification & Change \texttt{D\_hat} in a middle entry     & 100\% \\
+Entry deletion     & Remove the middle entry from the chain       & 100\% \\
+Entry reordering   & Swap the first two entries                   & 100\% \\
+HMAC forgery       & Replace \texttt{entry\_hmac} with random hex & 100\% \\
+prev-HMAC splice   & Forge entry 0 and update entry 1's \texttt{prev\_hmac} & 100\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The prev-HMAC splice (last row) is the most sophisticated attack:
+the adversary forges the HMAC of entry 0 \emph{and} propagates the
+forged value into entry 1's \texttt{prev\_hmac} to maintain apparent
+chain continuity.  This is detected because \texttt{entry\_hmac}
+is computed as $\mathrm{HMAC\text{-}SHA256}(K, \texttt{seq} \|\,
+\texttt{apb\_json} \| \texttt{prev\_hmac})$: an attacker who does
+not know $K$ cannot produce a valid \texttt{entry\_hmac} for the
+forged entry, so \texttt{verify\_integrity} rejects at entry 0
+regardless of the splice.
+
+\subsection*{F5 — Duplicate APB Submission (V5 necessity)}
+
+We submit the \emph{same} APB $N = 1{,}000$ times, first without
+the V5 nonce store (\texttt{seen\_event\_ids = None}), then with
+it (\texttt{seen\_event\_ids} as a live set).
+
+\begin{table}[h]
+\centering
+\caption{F5 Duplicate-submission results. Without V5 every replay is
+accepted; with V5 only the first submission succeeds.}
+\label{tab:exp_f5}
+\small
+\begin{tabular}{lccc}
+\toprule
+Configuration & Accepted & Duplicates caught & False acceptances \\
+\midrule
+Without V5 (V4 only) & 1\,000 & 0   & 999 \\
+With V5              & 1      & 999 & 0   \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Without V5, every replay within the $300\,\mathrm{s}$ window is
+accepted: $V4$ is a \emph{freshness} check, not a uniqueness check.
+A legitimately signed APB can be replayed an arbitrary number of
+times if the replays arrive within the acceptance window.
+With V5 the \texttt{event\_id} UUID is recorded in the nonce store
+on first acceptance; all $999$ subsequent submissions return
+\texttt{DUPLICATE\_EVENT\_ID}.
+
+\paragraph{Fault injection summary.}
+Table~\ref{tab:exp_f_summary} aggregates the five fault classes.
+
+\begin{table}[h]
+\centering
+\caption{Experiment F summary. All five fault classes are handled
+correctly by the implementation; false-acceptance rate is $0\%$
+for F2--F5, and V4 boundary precision is exact for F1.}
+\label{tab:exp_f_summary}
+\small
+\begin{tabular}{llll}
+\toprule
+Fault & Targeted predicate & False-accept rate & Result \\
+\midrule
+F1 Clock drift         & V4 temporal freshness        & 0\% outside window & All 13 offsets correct \\
+F2 Key mismatch        & V1 signature validity        & 0\%                & 100\% INVALID\_SIGNATURE \\
+F3 Concurrent writes   & V5 + log thread safety       & 0\%                & 800/800 verified \\
+F4 Log tampering       & HMAC chain integrity         & ---                & 100\% detected (5/5 strategies) \\
+F5 Duplicate APB       & V5 semantic uniqueness       & 0\% (with V5)      & 999/999 caught \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The fault injection results demonstrate that each verification
+predicate independently enforces its intended security property,
+and that the predicates are \emph{compositionally sound}: no fault
+class circumvents another predicate by exploiting the order of checks.
 
 % =============================================================================
 \section{Discussion}

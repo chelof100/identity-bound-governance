@@ -1,0 +1,199 @@
+{
+  "experiment": "F",
+  "title": "Infrastructure Fault Injection",
+  "n_events": 1000,
+  "v4_window_seconds": 300.0,
+  "f1": {
+    "fault": "F1",
+    "description": "Clock Drift \u2014 V4 temporal freshness boundaries",
+    "n_events_per_offset": 1000,
+    "offsets_tested": 13,
+    "all_offsets_correct": true,
+    "boundary_correct_at_301": true,
+    "per_offset": {
+      "-600": {
+        "delta_seconds": -600,
+        "expected": "REJECT",
+        "accepted": 0,
+        "rejected_replay": 1000,
+        "total": 1000,
+        "correct": true
+      },
+      "-310": {
+        "delta_seconds": -310,
+        "expected": "REJECT",
+        "accepted": 0,
+        "rejected_replay": 1000,
+        "total": 1000,
+        "correct": true
+      },
+      "-301": {
+        "delta_seconds": -301,
+        "expected": "REJECT",
+        "accepted": 0,
+        "rejected_replay": 1000,
+        "total": 1000,
+        "correct": true
+      },
+      "-299": {
+        "delta_seconds": -299,
+        "expected": "ACCEPT",
+        "accepted": 1000,
+        "rejected_replay": 0,
+        "total": 1000,
+        "correct": true
+      },
+      "-150": {
+        "delta_seconds": -150,
+        "expected": "ACCEPT",
+        "accepted": 1000,
+        "rejected_replay": 0,
+        "total": 1000,
+        "correct": true
+      },
+      "-1": {
+        "delta_seconds": -1,
+        "expected": "ACCEPT",
+        "accepted": 1000,
+        "rejected_replay": 0,
+        "total": 1000,
+        "correct": true
+      },
+      "0": {
+        "delta_seconds": 0,
+        "expected": "ACCEPT",
+        "accepted": 1000,
+        "rejected_replay": 0,
+        "total": 1000,
+        "correct": true
+      },
+      "1": {
+        "delta_seconds": 1,
+        "expected": "ACCEPT",
+        "accepted": 1000,
+        "rejected_replay": 0,
+        "total": 1000,
+        "correct": true
+      },
+      "150": {
+        "delta_seconds": 150,
+        "expected": "ACCEPT",
+        "accepted": 1000,
+        "rejected_replay": 0,
+        "total": 1000,
+        "correct": true
+      },
+      "299": {
+        "delta_seconds": 299,
+        "expected": "ACCEPT",
+        "accepted": 1000,
+        "rejected_replay": 0,
+        "total": 1000,
+        "correct": true
+      },
+      "301": {
+        "delta_seconds": 301,
+        "expected": "REJECT",
+        "accepted": 0,
+        "rejected_replay": 1000,
+        "total": 1000,
+        "correct": true
+      },
+      "310": {
+        "delta_seconds": 310,
+        "expected": "REJECT",
+        "accepted": 0,
+        "rejected_replay": 1000,
+        "total": 1000,
+        "correct": true
+      },
+      "600": {
+        "delta_seconds": 600,
+        "expected": "REJECT",
+        "accepted": 0,
+        "rejected_replay": 1000,
+        "total": 1000,
+        "correct": true
+      }
+    }
+  },
+  "f2": {
+    "fault": "F2",
+    "description": "Registry Key Mismatch \u2014 wrong PK in registry",
+    "n_events": 1000,
+    "invalid_signature_count": 1000,
+    "false_acceptance_count": 0,
+    "false_acceptance_rate_pct": 0.0,
+    "true_rejection_rate_pct": 100.0,
+    "proposition_holds": true
+  },
+  "f3": {
+    "fault": "F3",
+    "description": "Concurrent Writes \u2014 V5 thread safety via locking",
+    "n_threads": 16,
+    "events_per_thread": 50,
+    "total_events": 800,
+    "total_accepted": 800,
+    "total_duplicate_events_caught": 0,
+    "errors": [],
+    "log_integrity_ok": true,
+    "log_entries_verified": 800,
+    "false_acceptance_count": 0,
+    "proposition_holds": true
+  },
+  "f4": {
+    "fault": "F4",
+    "description": "Log Tampering \u2014 HMAC chain integrity under 5 strategies",
+    "n_entries_per_log": 10,
+    "repetitions_per_strategy": 100,
+    "strategies": {
+      "field_modification": {
+        "detected": 100,
+        "undetected": 0,
+        "detection_rate_pct": 100.0
+      },
+      "entry_deletion": {
+        "detected": 100,
+        "undetected": 0,
+        "detection_rate_pct": 100.0
+      },
+      "entry_reordering": {
+        "detected": 100,
+        "undetected": 0,
+        "detection_rate_pct": 100.0
+      },
+      "hmac_forgery": {
+        "detected": 100,
+        "undetected": 0,
+        "detection_rate_pct": 100.0
+      },
+      "prev_hmac_splice": {
+        "detected": 100,
+        "undetected": 0,
+        "detection_rate_pct": 100.0
+      }
+    },
+    "all_strategies_100pct_detected": true,
+    "proposition_holds": true
+  },
+  "f5": {
+    "fault": "F5",
+    "description": "Duplicate APB Submission \u2014 V5 necessity demonstration",
+    "submissions": 1000,
+    "without_v5": {
+      "accepted": 1000,
+      "false_acceptances": 999,
+      "false_acceptance_rate_pct": 100.0
+    },
+    "with_v5": {
+      "accepted": 1,
+      "duplicates_caught": 999,
+      "false_acceptances": 0,
+      "false_acceptance_rate_pct": 0.0
+    },
+    "v5_eliminates_duplicates": true,
+    "v5_necessity": true,
+    "proposition_holds": true
+  },
+  "all_fault_classes_pass": true
+}
