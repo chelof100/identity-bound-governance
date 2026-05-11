@@ -112,6 +112,9 @@ MockLLM stack across $10$ seeds and $10{,}000$ steps, governance completeness
 holds identically under two threshold policies ($3{,}812$ halt events,
 zero unresolved cases). Across $9$ adversarial vectors against
 $200$ freshly-signed APBs, the verifier achieves $100.0000\%$ detection.
+A multi-principal threshold experiment across $7{,}000$ events confirms
+Byzantine principal resistance: $0$ false acceptances in $2{,}000$
+single-key capture attempts under $k = 2$.
 A cross-model study of six open LLMs (\texttt{mistral}, \texttt{deepseek-r1},
 \texttt{gemma}, \texttt{gpt-oss}, \texttt{qwen}, \texttt{llama3}) finds
 that the model-specific drift threshold $\Tstar$ is stable within model
@@ -193,13 +196,15 @@ Specifically:
         Registry, a five-predicate verifier (V1--V5, including a
         semantic-uniqueness check via UUID4 event identifiers), and an
         append-only log with HMAC chaining for persistence.
-  \item We validate the construction empirically through four
-        experiments (\S\ref{sec:exp_a}--\S\ref{sec:exp_d}):
+  \item We validate the construction empirically through five
+        experiments (\S\ref{sec:exp_a}--\S\ref{sec:exp_e}):
         Governance Completeness over $10$ seeds and two threshold
         policies; APB Integrity under nine adversarial vectors;
-        cross-model $\Tstar$ across six open LLM families; and
+        cross-model $\Tstar$ across six open LLM families;
         temperature insensitivity across three of those families
-        and four sampling temperatures.
+        and four sampling temperatures; and multi-principal
+        threshold governance with Byzantine resistance validation
+        across $7{,}000$ events covering seven attack scenarios.
   \item We extract \emph{Proposition~5.1} (\S\ref{sec:prop_calibration})
         as an operational design recipe: given a measured $\Tstar$
         for a model, the persistence window $\Delta T$ that the
@@ -224,8 +229,8 @@ contextual rather than constitutive.
 mechanisms. \S\ref{sec:framework} introduces the Principal Set, the
 Authority Resolution Function, and the APB structure. \S\ref{sec:theorems}
 proves the four theorems. \S\ref{sec:impl} describes the implementation
-and the threat model boundary. \S\ref{sec:exp_a}--\S\ref{sec:exp_d}
-report the four validation experiments. \S\ref{sec:discussion} discusses
+and the threat model boundary. \S\ref{sec:exp_a}--\S\ref{sec:exp_e}
+report the five validation experiments. \S\ref{sec:discussion} discusses
 limitations and integration paths. \S\ref{sec:conclusion} concludes.
 
 % =============================================================================
@@ -492,6 +497,51 @@ of duties, out-of-band review) are configurable on top of the APB
 but are not part of the APB protocol itself. We return to this
 distinction in the discussion (\S\ref{sec:discussion}).
 
+\subsection{Multi-Principal APB Extension}
+\label{sec:multi_principal}
+
+The base APB carries a single signature $\sigh$ from one principal.
+For deployments that require stronger governance guarantees, we extend
+the construction to support \emph{threshold signing}: a Multi-Principal
+APB requires $k$ valid, distinct-principal signatures out of $n$
+registered principals ($k$-of-$n$).
+
+\begin{definition}[Multi-Principal APB]
+\label{def:multi_apb}
+A \emph{Multi-Principal Accountability Proof Block} with threshold $k$
+is a quadruple
+\[
+  \APB^{(k)} \;=\; (\Es,\;\Dh,\;\Sigma,\;k)
+\]
+where $\Es$ and $\Dh$ are as in Definition~\ref{def:apb}, and
+$\Sigma = \{(H^1, \sigma^1), \ldots, (H^m, \sigma^m)\}$ is an
+ordered set of signature entries ($H^j \in \Pset$, $\sigma^j \in
+\{0,1\}^{512}$), each satisfying
+$\sigma^j = \mathrm{Sign}_{sk^j}(\mathrm{canon}(\Es)
+\,\Vert\, \mathrm{canon}(\Dh))$.
+The APB is \emph{valid} under threshold $k$
+iff at least $k$ entries in $\Sigma$ pass predicates V1--V3 and
+V5 over distinct principals $H^j \in \Pset$.
+\end{definition}
+
+Three structural properties hold by construction:
+\begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=2pt]
+  \item Each signer attests independently to the same $(\Es, \Dh)$
+        pair; no coordination between signers' devices is required.
+  \item Duplicate signer entries (same $\Hi$ appearing twice) are
+        rejected: each distinct principal counts at most once toward
+        the threshold.
+  \item The signed message is identical to the single-principal APB,
+        so the non-repudiability and anonymous-re-authorization
+        impossibility guarantees (T8.2, T8.3) apply to each entry
+        in $\Sigma$ individually.
+\end{enumerate}
+
+The $k$-of-$n$ structure is the formal basis for Byzantine principal
+resistance (Proposition~\ref{prop:byzantine} below): governance
+capture under $\APB^{(k)}$ requires the adversary to hold $k$
+distinct signing keys simultaneously.
+
 % =============================================================================
 \section{Theorems}
 \label{sec:theorems}
@@ -729,6 +779,41 @@ SHA-256 is linear in input size; the remaining operations are
 elementary.
 \end{proof}
 
+\subsection{Proposition 8.5 --- Byzantine Principal Resistance}
+\label{sec:p85}
+
+\begin{proposition}[Byzantine Principal Resistance]
+\label{prop:byzantine}
+Under the $k$-of-$n$ threshold construction of
+Definition~\ref{def:multi_apb}, an adversary $\mathcal{A}$ who
+controls $j < k$ principal signing keys cannot produce a verifying
+$\APB^{(k)}$, except with negligible probability.
+\end{proposition}
+
+\begin{proof}
+A verifying $\APB^{(k)}$ requires at least $k$ entries in $\Sigma$
+to satisfy V1 (valid signature against a registered public key).
+By T8.3 (Impossibility of Anonymous Re-Authorization), each valid
+entry requires possession of the corresponding signing key $sk^j$:
+producing a valid $\sigma^j$ without $sk^j$ reduces to breaking
+EUF-CMA of ed25519, which is infeasible under the discrete-log
+assumption. If $\mathcal{A}$ holds $j < k$ keys, they can produce at
+most $j$ valid entries; the threshold check fails. Entries for keys
+not held by $\mathcal{A}$ fail V1 with all but negligible probability.
+Therefore $\mathcal{A}$ cannot produce a verifying $\APB^{(k)}$
+with $j < k$ keys.
+\end{proof}
+
+\begin{remark}
+Proposition~\ref{prop:byzantine} formalises the security intuition
+for the composable access-control layer described in
+\S\ref{sec:composability}: with $k = \lceil n/2 \rceil + 1$, the
+construction achieves strict majority quorum; with $k = n$, it
+requires unanimous governance. The adversary's capture cost grows
+linearly in $k$, independently of the specific policy encoded in
+$\Dh$.
+\end{remark}
+
 % =============================================================================
 \section{Implementation}
 \label{sec:impl}
@@ -766,11 +851,12 @@ LOC counts include docstrings.}
 Module & LOC & Responsibility \\
 \midrule
 \texttt{agent/principal.py}        & 140 & Principal Set $\Pset$, keypair generation, registry, revocation. \\
-\texttt{stack/apb.py}              & 200 & $\Es$, $\Dh$, $\APB$ classes; canonical encoding; signing. \\
-\texttt{stack/apb\_verifier.py}    & 140 & 4-predicate verification; failure-mode enum; attribution. \\
+\texttt{stack/apb.py}              & 220 & $\Es$, $\Dh$, $\APB$ classes; RFC~8785 encoding; signing; event\_id. \\
+\texttt{stack/apb\_verifier.py}    & 155 & 5-predicate verification (V1--V5); failure-mode enum; attribution. \\
 \texttt{stack/governance\_layer.py}& 190 & Authority Resolution Function $G$; built-in policies. \\
+\texttt{stack/multi\_principal.py} & 280 & $\APB^{(k)}$, $k$-of-$n$ verifier, threshold governance layer. \\
 \midrule
-Total                              & 670 & Plus 61 unit tests over the four modules. \\
+Total                              & 985 & Plus 85 unit tests over all modules. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1079,6 +1165,86 @@ operationally relevant temperature(s). For fast-drifting models,
 a single-temperature characterisation appears to be sufficient.
 
 % =============================================================================
+\section{Experiment E: Multi-Principal Threshold Governance}
+\label{sec:exp_e}
+
+\paragraph{Goal.} Empirically validate Proposition~\ref{prop:byzantine}
+(Byzantine Principal Resistance): under $k$-of-$n$ threshold signing,
+governance capture requires the simultaneous compromise of at least
+$k$ distinct principals.
+
+\paragraph{Setup.} Three principals are registered: Alice ($A$),
+Bob ($B$), and Carol ($C$). We generate $N = 1{,}000$ governance
+events per scenario from fresh $(\Es, \Dh)$ pairs (unique
+\texttt{event\_id} per event). Seven scenarios test the full
+threat surface of the $k$-of-$n$ construction:
+
+\begin{center}
+\small
+\begin{tabular}{clll}
+\toprule
+ID & Configuration & Threshold & Expected result \\
+\midrule
+S1 & Alice only ($k=1$, $n=1$)         & 1 & \texttt{VALID} \\
+S2 & Alice + Bob ($k=2$, $n=2$)        & 2 & \texttt{VALID} \\
+S3 & Alice + Bob + Carol ($k=3$, $n=3$)& 3 & \texttt{VALID} \\
+S4 & Alice only, threshold=2           & 2 & \texttt{INSUFFICIENT\_SIGNATURES} \\
+S5 & Alice + Bob, threshold=3          & 3 & \texttt{INSUFFICIENT\_SIGNATURES} \\
+S6 & Alice (legit) + forged Bob sig    & 2 & \texttt{INVALID\_SIGNATURE} \\
+S7 & Alice counted twice (duplicate)   & 2 & \texttt{DUPLICATE\_SIGNER} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+S4--S5 simulate under-threshold submission (attacker holds $j < k$
+keys). S6 simulates a capture attempt: attacker controls Alice's key
+and forges Bob's signature with a random key not in the registry.
+S7 simulates key reuse (attempting to count the same key twice to
+satisfy the threshold).
+
+\paragraph{Results.} Table~\ref{tab:exp_e} summarises the outcome.
+
+\begin{table}[h]
+\centering
+\caption{Experiment E results. All $7 \times 1{,}000 = 7{,}000$ events
+produced the expected outcome; no scenario deviated from its
+expected result.}
+\label{tab:exp_e}
+\small
+\begin{tabular}{clccr}
+\toprule
+ID & Scenario & Expected & Events & Rate \\
+\midrule
+S1 & $k=1$, 1 legit signer              & VALID                  & 1\,000 & 100.00\% \\
+S2 & $k=2$, 2 legit signers             & VALID                  & 1\,000 & 100.00\% \\
+S3 & $k=3$, 3 legit signers             & VALID                  & 1\,000 & 100.00\% \\
+S4 & $k=2$, 1 signer only               & INSUFF. SIGNATURES     & 1\,000 & 100.00\% \\
+S5 & $k=3$, 2 signers only              & INSUFF. SIGNATURES     & 1\,000 & 100.00\% \\
+S6 & $k=2$, 1 legit + 1 forged sig      & INVALID SIGNATURE      & 1\,000 & 100.00\% \\
+S7 & $k=2$, same key counted twice      & DUPLICATE SIGNER       & 1\,000 & 100.00\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Byzantine resistance.}
+S6 and S7 are the critical Byzantine scenarios: in S6, an attacker
+who controls Alice's key cannot obtain a verifying $\APB^{(2)}$
+without a second legitimate key --- forging Bob's signature fails
+at V1 (EUF-CMA of ed25519). In S7, attempting to count Alice's
+key twice is caught by the duplicate-signer check before the
+threshold is reached. Both scenarios produce $0$ false acceptances
+across $1{,}000$ events, confirming Proposition~\ref{prop:byzantine}:
+single-key capture is infeasible under $k \geq 2$.
+
+\paragraph{Threshold monotonicity.}
+Scenarios S1--S3 demonstrate clean threshold monotonicity:
+governance events with $j$ valid signatures succeed at threshold
+$k \leq j$ and fail at $k > j$. The verifier correctly
+distinguishes ``insufficient signatures'' (S4--S5) from ``invalid
+signature'' (S6), enabling an operator to diagnose whether a
+rejection is due to under-provisioning or an active attack.
+
+% =============================================================================
 \section{Discussion}
 \label{sec:discussion}
 
@@ -1211,12 +1377,14 @@ identity-bound, cryptographically verifiable governance decisions.
 The construction is supported by four theorems ---
 protocol-bounded governance completeness, non-repudiability,
 impossibility of anonymous re-authorisation, and finite-time
-evidence construction --- and a real-cryptography reference
-implementation using the RFC~8785 JSON Canonicalization Scheme
-and a five-predicate verifier that provides both temporal freshness
-and semantic uniqueness guarantees. Empirical validation
+evidence construction --- a Byzantine principal resistance
+proposition for $k$-of-$n$ threshold signing, and a real-cryptography
+reference implementation using the RFC~8785 JSON Canonicalization
+Scheme and a five-predicate verifier that provides both temporal
+freshness and semantic uniqueness guarantees. Empirical validation
 across $3{,}812$ halt events, $1{,}800$ adversarial attempts,
-$18$ cross-model runs, and $36$ temperature-sweep runs shows that the
+$7{,}000$ multi-principal threshold events, $18$ cross-model runs,
+and $36$ temperature-sweep runs shows that the
 construction behaves as the theory predicts and that the model-specific
 drift threshold $\Tstar$ is stable, measurable, and architecture-driven
 rather than scale-driven, with the empirical caveat that

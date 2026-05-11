@@ -1,0 +1,86 @@
+{
+  "experiment": "E",
+  "title": "Multi-Principal Threshold Governance",
+  "n_events_per_scenario": 1000,
+  "n_principals": 3,
+  "scenarios": [
+    {
+      "scenario": "S1",
+      "description": "k=1, 1 legit signer (Alice)",
+      "n_events": 1000,
+      "expected_result": "VALID",
+      "expected_count": 1000,
+      "expected_rate_pct": 100.0,
+      "result_distribution": {
+        "VALID": 1000
+      }
+    },
+    {
+      "scenario": "S2",
+      "description": "k=2, 2 legit signers (Alice+Bob)",
+      "n_events": 1000,
+      "expected_result": "VALID",
+      "expected_count": 1000,
+      "expected_rate_pct": 100.0,
+      "result_distribution": {
+        "VALID": 1000
+      }
+    },
+    {
+      "scenario": "S3",
+      "description": "k=3, 3 legit signers (Alice+Bob+Carol)",
+      "n_events": 1000,
+      "expected_result": "VALID",
+      "expected_count": 1000,
+      "expected_rate_pct": 100.0,
+      "result_distribution": {
+        "VALID": 1000
+      }
+    },
+    {
+      "scenario": "S4",
+      "description": "k=2, 1 signer only \u2014 under-threshold attack",
+      "n_events": 1000,
+      "expected_result": "INSUFFICIENT_SIGNATURES",
+      "expected_count": 1000,
+      "expected_rate_pct": 100.0,
+      "result_distribution": {
+        "INSUFFICIENT_SIGNATURES": 1000
+      }
+    },
+    {
+      "scenario": "S5",
+      "description": "k=3, 2 signers only \u2014 under-threshold attack",
+      "n_events": 1000,
+      "expected_result": "INSUFFICIENT_SIGNATURES",
+      "expected_count": 1000,
+      "expected_rate_pct": 100.0,
+      "result_distribution": {
+        "INSUFFICIENT_SIGNATURES": 1000
+      }
+    },
+    {
+      "scenario": "S6",
+      "description": "k=2, 1 legit Alice + 1 forged Bob sig (random key)",
+      "n_events": 1000,
+      "expected_result": "INVALID_SIGNATURE",
+      "expected_count": 1000,
+      "expected_rate_pct": 100.0,
+      "result_distribution": {
+        "INVALID_SIGNATURE": 1000
+      }
+    },
+    {
+      "scenario": "S7",
+      "description": "k=2, Alice counted twice (double-signer attack)",
+      "n_events": 1000,
+      "expected_result": "DUPLICATE_SIGNER",
+      "expected_count": 1000,
+      "expected_rate_pct": 100.0,
+      "result_distribution": {
+        "DUPLICATE_SIGNER": 1000
+      }
+    }
+  ],
+  "proposition_85_holds": true
+}
