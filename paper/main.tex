@@ -136,24 +136,21 @@ measured threshold yields accountable authority transfer.
 \section{Introduction}
 \label{sec:intro}
 
-The deployment of LLM-based autonomous agents in environments where their
-actions have real-world consequences raises a question that prompt-level
-guards and policy engines do not answer: \emph{when an agent's runtime
-governance system declares that it can no longer act safely, who is
-empowered to lift that halt, and what record must they leave behind?}
+P7 of this series~\citep{fernandez2026applied} established that persistent
+halts are not implementation failures but structural consequences of bounded
+runtime governance: when drift accumulates past the recovery authority of
+the autonomous stack, execution stops and accountability remains unresolved.
+P8 answers the question that structural halt leaves open --- \emph{who has
+the authority to lift it, under what evidence, and with what
+non-repudiable record?}
 
-Prior work in this series~\citep{fernandez2026applied} establishes that
-persistent halts emerge structurally, not accidentally, even in fully
-governed agent stacks: runtime drift and partial observability generate
-halt events that the Recovery Loop exhausts its bounded authority trying
-to resolve. Once such a halt is persistent in the formal sense
+Concretely: once a halt is persistent in the formal sense
 (\S\ref{sec:framework}), the system cannot issue a unilateral resumption
---- doing so would constitute a recalibration of its own authority, which
-the design constraints DC.1 and DC.2 of~\citep{fernandez2026applied}
-explicitly forbid. \emph{P7 establishes the empirical necessity; P8
-answers the structural question that necessity leaves open}: who may
-re-authorize execution, under what evidence, and with what non-repudiable
-record?
+without recalibrating its own authority, which design constraints DC.1
+and DC.2 of~\citep{fernandez2026applied} explicitly forbid.
+This paper introduces the \emph{Accountability Proof Block} ($\APB$) as
+the minimal mechanism for binding that authority to a verifiable human
+decision.
 
 We refer to this as the problem of \emph{identity-bound governance under
 execution uncertainty}.
@@ -768,8 +765,9 @@ linearly in the size of its underlying input:
 $\mathrm{hash}(\Azero)$ in $O(|\Azero|)$;
 $\Dhat(t_e)$ in $O(1)$ (already computed by the IML monitor);
 $t_e$ in $O(1)$;
-$\mathrm{eid}$ in $O(1)$ (UUID4 generation is a constant-time
-operation over a fixed-length random bitstring);
+$\mathrm{eid}$ in $O(1)$ (UUID4 generation is a bounded-time
+operation under standard OS entropy assumptions, reading a fixed-length
+random bitstring from the kernel's CSPRNG);
 $\mathrm{hash}(\mathrm{trace}_{\le t_e})$ in $O(|\mathrm{trace}_{\le t_e}|)$;
 $\mathrm{cause}$ in $O(1)$ (a fixed-vocabulary string).
 \end{lemma}
@@ -1098,6 +1096,19 @@ parameters.
 % =============================================================================
 \section{Experiment D: Temperature Insensitivity}
 \label{sec:exp_d}
+
+\paragraph{Precondition for APB construction.}
+An APB is constructible only after a governance event has been triggered
+--- and a governance event requires that $\Tstar$ be stable and
+measurable for the deployed model.  If $\Tstar$ drifted substantially
+with the LLM's sampling temperature, the threshold would need to be
+recalibrated per deployment configuration, undermining the
+Proposition~5.1 calibration recipe (\S\ref{sec:prop_calibration}).
+Experiment~D validates this precondition: $\Tstar$ must be determined
+by the escalation protocol embedded in the system prompt, not by
+sampling stochasticity.  A model whose $\Tstar$ is temperature-stable
+can have its APB trigger calibrated once and deployed confidently
+across configurations.
 
 \paragraph{Goal.} Test the conjecture that $\Tstar$ is determined by
 the escalation protocol embedded in the system prompt rather than by
@@ -1584,6 +1595,11 @@ named, accountable human --- without trusting the system itself
 to make that handover honestly --- and that composes cleanly with
 threshold signing, RBAC, and policy engines for deployments that
 require stronger access-control guarantees.
+
+The contribution of P8 is not that humans remain in the loop.
+It is that when autonomous authority ends, the system can
+\emph{prove} who took control, under what evidence, and under
+which cryptographic guarantees.
 
 % =============================================================================
 \bibliographystyle{plainnat}
